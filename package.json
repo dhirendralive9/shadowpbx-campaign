@@ -1,0 +1,15 @@
+{
+  "name": "shadowpbx-campaign",
+  "version": "0.1.0",
+  "description": "Outbound campaign / press-1 IVR module for ShadowPBX, built on Asterisk ARI",
+  "main": "src/press1-test.js",
+  "scripts": {
+    "test:press1": "node src/press1-test.js"
+  },
+  "dependencies": {
+    "ari-client": "^2.2.0",
+    "dotenv": "^16.4.5"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}

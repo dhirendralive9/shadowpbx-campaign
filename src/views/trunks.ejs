@@ -20,6 +20,7 @@
         <td><span class="pill p-gray" data-reg="trunk-<%= t.id %>">—</span></td>
         <td style="text-align:right;white-space:nowrap">
           <button class="btn btn-sm" onclick="editTrunk('<%= t.id %>')">Edit</button>
+          <button class="btn btn-sm" onclick="diagnose('<%= t.id %>','<%= t.name %>')">Diagnose</button>
           <% if (!on) { %>
             <form class="inline-form" method="post" action="/trunks/<%= t.id %>/activate">
               <button class="btn btn-sm" type="submit">Use this</button></form>
@@ -101,5 +102,39 @@ var t_id=document.getElementById('t-id'),t_name=document.getElementById('t-name'
   }).catch(function(){});
   setTimeout(poll,5000);
 })();
+</script>
+
+<div class="section" id="diag-section" style="display:none">
+  <div class="sec-head"><div class="sec-title" id="diag-title">Diagnostics</div>
+    <button class="btn btn-sm" type="button" onclick="document.getElementById('diag-section').style.display='none'">Close</button></div>
+  <div class="card">
+    <div id="diag-hint"></div>
+    <div class="form-label" style="margin-top:10px">Registration</div>
+    <pre class="out-pre" id="diag-reg"></pre>
+    <div class="form-label" style="margin-top:10px">SIP exchange</div>
+    <pre class="out-pre" id="diag-sip"></pre>
+  </div>
+</div>
+
+<script>
+function diagnose(id, name){
+  var sec=document.getElementById('diag-section');
+  sec.style.display='';
+  document.getElementById('diag-title').textContent='Diagnostics — '+name;
+  document.getElementById('diag-hint').innerHTML='<span class="muted">Forcing a REGISTER and capturing the SIP exchange… (about 4s)</span>';
+  document.getElementById('diag-reg').textContent='';
+  document.getElementById('diag-sip').textContent='';
+  sec.scrollIntoView({behavior:'smooth'});
+  fetch('/api/trunks/'+id+'/diagnose').then(function(r){return r.json();}).then(function(d){
+    if(!d.ok){ document.getElementById('diag-hint').innerHTML='<div class="alert alert-err">'+(d.error||'failed')+'</div>'; return; }
+    document.getElementById('diag-hint').innerHTML = d.hint
+      ? '<div class="alert alert-warn">'+d.hint+'</div>'
+      : '<div class="alert alert-ok">No obvious failure code in the exchange — read the trace below.</div>';
+    document.getElementById('diag-reg').textContent=d.registration||'(no output)';
+    document.getElementById('diag-sip').textContent=d.sip||'(nothing captured — is /var/log/asterisk/full being written?)';
+  }).catch(function(e){
+    document.getElementById('diag-hint').innerHTML='<div class="alert alert-err">'+e.message+'</div>';
+  });
+}
 </script>
 <%- include('foot') %>

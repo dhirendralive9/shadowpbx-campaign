@@ -246,6 +246,59 @@ async function applySettings(s) {
   };
 }
 
+
+const LOG_CANDIDATES = ['/var/log/asterisk/full', '/var/log/asterisk/messages'];
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Tail the Asterisk log, newest lines last. */
+function logTail(lines = 400) {
+  for (const f of LOG_CANDIDATES) {
+    try {
+      const txt = fs.readFileSync(f, 'utf8');
+      return txt.split('\n').slice(-lines).join('\n');
+    } catch (e) { /* try next */ }
+  }
+  return '';
+}
+
+/**
+ * Work out WHY a registration is being rejected.
+ *
+ * "Rejected" only tells you the far end said no. The reason is in the SIP
+ * response, so turn the PJSIP logger on, force a REGISTER, and pull the
+ * exchange back out of the log.
+ */
+async function diagnoseTrunk(id) {
+  const reg = `trunk-${id}`;
+  const out = { registration: '', endpoint: '', sip: '', hint: '' };
+
+  await cli('pjsip set logger on');
+  await cli(`pjsip send register ${reg}`);
+  await sleep(3500);
+
+  out.registration = (await cli(`pjsip show registration ${reg}`)).out;
+  out.endpoint = (await cli(`pjsip show endpoint ${reg}`)).out.split('\n').slice(0, 18).join('\n');
+
+  // Keep only SIP traffic and registration lines from the tail.
+  const tail = logTail(500).split('\n');
+  const keep = [];
+  for (const l of tail) {
+    if (/REGISTER|SIP\/2\.0 \d{3}|Transmitting|Received|res_pjsip|registration/i.test(l)) keep.push(l);
+  }
+  out.sip = keep.slice(-60).join('\n');
+  await cli('pjsip set logger off');
+
+  // Translate the response code into something actionable.
+  const m = out.sip.match(/SIP\/2\.0 (40[0-9]|4[1-9][0-9]|5\d\d|6\d\d)[^\n]*/g);
+  const codes = (m || []).map((x) => x.match(/SIP\/2\.0 (\d{3})/)[1]);
+  if (codes.includes('403')) out.hint = '403 Forbidden — the provider rejected the credentials or this server IP is not permitted to register. Check the username/password exactly, and whether the provider requires IP whitelisting.';
+  else if (codes.includes('401') || codes.includes('407')) out.hint = '401/407 repeatedly — the auth challenge is being answered with the wrong password, or the provider expects a different auth username than the SIP user.';
+  else if (codes.includes('404')) out.hint = '404 Not Found — the provider does not recognise this account on that host. Check the SIP host and username.';
+  else if (codes.includes('408') || !out.sip.trim()) out.hint = 'No response — the REGISTER is not reaching the provider. Check outbound UDP 5060 and that the SIP host resolves.';
+  else if (codes.includes('503')) out.hint = '503 Service Unavailable — provider-side problem or rate limiting.';
+  return out;
+}
+
 /** Sound files available for the greeting dropdown. */
 function listSounds() {
   const dir = `${SOUNDS_DIR}/campaign`;
@@ -259,4 +312,4 @@ function listSounds() {
   }
 }
 
-module.exports = { cli, status, isRunning, renderPjsip, activeEndpoints, applySettings, listSounds, SOUNDS_DIR };
+module.exports = { cli, status, isRunning, renderPjsip, activeEndpoints, applySettings, listSounds, diagnoseTrunk, logTail, SOUNDS_DIR };

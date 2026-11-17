@@ -248,6 +248,11 @@ app.get('/api/status', auth, async (req, res) => {
   }
 });
 
+app.get('/api/trunks/:id/diagnose', auth, async (req, res) => {
+  try { res.json({ ok: true, ...(await asterisk.diagnoseTrunk(req.params.id)) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 app.post('/api/reload', auth, async (req, res) => {
   const r = await asterisk.applySettings(store.load());
   res.json(r);

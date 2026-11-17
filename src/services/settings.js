@@ -99,7 +99,13 @@ function saveTrunk(data) {
     user: (data.user || '').trim(),
     port: parseInt(data.port, 10) || 5060,
     transport: data.transport || 'udp',
-    register: data.register !== false,
+    // A checkbox sends nothing when unticked, so 'absent' must mean false --
+    // otherwise registration can never be turned off, which is fatal for a
+    // provider that authenticates by IP and rejects REGISTER outright.
+    register: data.register === true || data.register === 'true'
+              || data.register === 'on' || data.register === '1',
+    // Extra IPs the provider sends from, when they differ from the SIP host.
+    matchIps: (data.matchIps || '').trim(),
     callerId: (data.callerId || '').trim(),
   };
   const existing = data.id ? s.trunks.find((t) => t.id === data.id) : null;

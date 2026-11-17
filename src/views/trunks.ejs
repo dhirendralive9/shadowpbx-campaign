@@ -8,7 +8,7 @@
       <div class="empty">No trunks yet. Add one below.</div>
     <% } else { %>
     <table class="tbl"><thead><tr>
-      <th>Name</th><th>Host</th><th>Username</th><th>Transport</th><th>Register</th><th>Status</th><th></th>
+      <th>Name</th><th>Host</th><th>Username</th><th>Transport</th><th>Auth</th><th>Status</th><th></th>
     </tr></thead><tbody>
     <% settings.trunks.forEach(function(t){ var on = t.id === settings.activeTrunkId; %>
       <tr>
@@ -16,12 +16,15 @@
         <td class="mono"><%= t.host %>:<%= t.port %></td>
         <td class="mono"><%= t.user %></td>
         <td><%= (t.transport||'udp').toUpperCase() %></td>
-        <td><%= t.register ? 'Yes' : 'No' %></td>
-        <td><span class="pill p-gray" data-reg="trunk-<%= t.id %>">—</span></td>
+        <td><%= t.register ? 'Register' : 'IP auth' %></td>
+        <td><span class="pill p-gray" data-reg="trunk-<%= t.id %>"
+                 data-mode="<%= t.register ? 'register' : 'ip' %>">—</span></td>
         <td style="text-align:right;white-space:nowrap">
           <button class="btn btn-sm" onclick="editTrunk('<%= t.id %>')">Edit</button>
           <button class="btn btn-sm" onclick="diagnose('<%= t.id %>','<%= t.name %>')">Diagnose</button>
-          <button class="btn btn-sm" onclick="reReg('<%= t.id %>', this)">Re-register</button>
+          <% if (t.register) { %>
+            <button class="btn btn-sm" onclick="reReg('<%= t.id %>', this)">Re-register</button>
+          <% } %>
           <% if (!on) { %>
             <form class="inline-form" method="post" action="/trunks/<%= t.id %>/activate">
               <button class="btn btn-sm" type="submit">Use this</button></form>
@@ -59,9 +62,21 @@
           </select></div>
         <div class="form-group"><label class="form-label">Caller ID</label>
           <input class="form-input" name="callerId" id="t-cid" placeholder="4915XXXXXXXX"></div>
+        <div class="form-group"><label class="form-label">Provider IPs <span class="muted">(optional)</span></label>
+          <input class="form-input" name="matchIps" id="t-match" placeholder="37.187.146.93">
+          <span class="muted" style="font-size:11px">Extra source IPs to accept inbound calls from, if they
+            differ from the SIP host.</span></div>
       </div>
-      <label class="form-label" style="display:flex;align-items:center;gap:8px;margin:10px 0 16px">
+      <!-- The hidden field is load-bearing: an unticked checkbox submits nothing,
+           so without it "off" is indistinguishable from "not sent" and
+           registration can never actually be turned off. -->
+      <input type="hidden" name="register" value="false">
+      <label class="form-label" style="display:flex;align-items:center;gap:8px;margin:10px 0 6px">
         <input type="checkbox" name="register" id="t-register" value="true" checked> Register with the provider</label>
+      <div class="muted" style="font-size:11px;margin-bottom:16px">
+        Leave this off for an <strong>IP-authenticated</strong> account (your provider may call it
+        “IP to IP”). Those accounts reject REGISTER with a bare 403 however correct the password is —
+        the provider recognises this server by its public IP instead.</div>
       <button class="btn btn-primary" type="submit">Save trunk</button>
       <button class="btn" type="button" onclick="resetTrunk()">Cancel</button>
       <span class="muted" style="font-size:11px;margin-left:8px">Saving rewrites pjsip.conf and reloads PJSIP.</span>
@@ -72,12 +87,13 @@
 <script>
 var TRUNKS = <%- JSON.stringify(settings.trunks.map(function(t){
   return {id:t.id,name:t.name,host:t.host,user:t.user,port:t.port,transport:t.transport,
-          register:t.register,callerId:t.callerId}; })) %>;
+          register:t.register,callerId:t.callerId,matchIps:t.matchIps}; })) %>;
 function editTrunk(id){
   var t = TRUNKS.find(function(x){return x.id===id;}); if(!t) return;
   t_id.value=t.id; t_name.value=t.name||''; t_host.value=t.host||''; t_user.value=t.user||'';
   t_port.value=t.port||5060; t_transport.value=t.transport||'udp'; t_cid.value=t.callerId||'';
-  t_register.checked=!!t.register; t_pass.placeholder='•••••••• (unchanged)'; t_pass.value='';
+  t_register.checked=!!t.register; t_match.value=t.matchIps||'';
+  t_pass.placeholder='•••••••• (unchanged)'; t_pass.value='';
   document.getElementById('form-title').textContent='Edit trunk — '+(t.name||'');
   document.getElementById('trunk-form').scrollIntoView({behavior:'smooth'});
 }
@@ -90,15 +106,27 @@ var t_id=document.getElementById('t-id'),t_name=document.getElementById('t-name'
  t_host=document.getElementById('t-host'),t_user=document.getElementById('t-user'),
  t_pass=document.getElementById('t-pass'),t_port=document.getElementById('t-port'),
  t_transport=document.getElementById('t-transport'),t_cid=document.getElementById('t-cid'),
- t_register=document.getElementById('t-register');
-// live registration status
+ t_register=document.getElementById('t-register'),t_match=document.getElementById('t-match');
+// Live status. A registering trunk reports from `pjsip show registrations`;
+// an IP-authenticated one never appears there at all, so its health is the
+// qualify (OPTIONS) result against its AOR instead.
 (function poll(){
   fetch('/api/status').then(r=>r.json()).then(function(d){
     if(!d.ok) return;
-    (d.status.registrations||[]).forEach(function(r){
-      var el=document.querySelector('[data-reg="'+r.name+'"]');
-      if(el){ el.textContent=r.status;
-        el.className='pill '+(/Registered/i.test(r.status)?'p-ok':'p-err'); }
+    document.querySelectorAll('[data-reg]').forEach(function(el){
+      var name=el.getAttribute('data-reg');
+      if(el.getAttribute('data-mode')==='ip'){
+        var c=(d.status.contacts||[]).find(function(x){return x.aor===name;});
+        if(!c){ el.textContent='no contact'; el.className='pill p-err'; return; }
+        var up=/Avail|NonQual/i.test(c.status);
+        el.textContent=(up?'reachable':'unreachable')+(c.rtt?' · '+c.rtt:'');
+        el.className='pill '+(up?'p-ok':'p-err');
+      } else {
+        var r=(d.status.registrations||[]).find(function(x){return x.name===name;});
+        if(!r){ el.textContent='—'; el.className='pill p-gray'; return; }
+        el.textContent=r.status;
+        el.className='pill '+(/Registered/i.test(r.status)?'p-ok':'p-err');
+      }
     });
   }).catch(function(){});
   setTimeout(poll,5000);

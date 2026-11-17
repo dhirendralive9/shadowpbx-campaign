@@ -50,15 +50,32 @@ function parseEndpoints(out) {
   return rows;
 }
 
+/**
+ * Parse `pjsip show contacts`.
+ *
+ * An IP-authenticated trunk never registers, so it has no row in
+ * `pjsip show registrations` and would show as permanently unknown. Its real
+ * health is the qualify (OPTIONS) result against its AOR, which lives here.
+ */
+function parseContacts(out) {
+  const rows = [];
+  for (const line of out.split('\n')) {
+    const m = line.match(/^\s*Contact:\s+(\S+?)\/(\S+)\s+(\S+)\s+(Avail|Unavail|Unknown|NonQual)\s*(\S+)?/i);
+    if (m) rows.push({ aor: m[1], uri: m[2], status: m[4], rtt: m[5] || '' });
+  }
+  return rows;
+}
+
 async function status() {
   const running = await isRunning();
   if (!running) {
-    return { running: false, version: null, registrations: [], endpoints: [], ari: { loaded: 0, ok: false }, http: '', channels: 0 };
+    return { running: false, version: null, registrations: [], endpoints: [], contacts: [], ari: { loaded: 0, ok: false }, http: '', channels: 0 };
   }
-  const [ver, regs, eps, ari, http, chans] = await Promise.all([
+  const [ver, regs, eps, cts, ari, http, chans] = await Promise.all([
     cli('core show version'),
     cli('pjsip show registrations'),
     cli('pjsip show endpoints'),
+    cli('pjsip show contacts'),
     cli('module show like res_ari'),
     cli('http show status'),
     cli('core show channels count'),
@@ -72,6 +89,7 @@ async function status() {
     version: (ver.out.split('\n')[0] || '').trim(),
     registrations: parseRegistrations(regs.out),
     endpoints: parseEndpoints(eps.out),
+    contacts: parseContacts(cts.out),
     // res_ari_model alone means ARI never actually started.
     ari: { loaded: ariLoaded, ok: ariLoaded > 1, raw: ari.out },
     http: http.out,
@@ -100,6 +118,10 @@ function renderPjsip(s) {
 ;   allow = ulaw,alaw  -> G.711 only. G.729 made prompts inaudible.
 ;   dtmf_mode = auto   -> RFC2833 + in-band fallback, so a carrier that
 ;                         won't negotiate telephone-event can't break press-1.
+;
+; A trunk with Register off is IP-authenticated: no registration block is
+; emitted, and the provider recognises us by source IP alone. Sending REGISTER
+; to such an account earns a bare 403 with no auth challenge.
 ;==============================================================
 
 [transport-udp]
@@ -129,13 +151,20 @@ expiration = 3600
 
 `;
     }
-    out += `[${id}-auth]
+    // With IP authentication there is nothing to authenticate against. Emitting
+    // an auth section anyway is harmless (it only answers challenges), but a
+    // trunk saved without a password must not get a half-filled one.
+    const hasAuth = !!(t.user && t.pass);
+    if (hasAuth) {
+      out += `[${id}-auth]
 type = auth
 auth_type = userpass
-username = ${esc(t.user)}
+username = ${esc(t.authUser || t.user)}
 password = ${esc(t.pass)}
 
-[${id}]
+`;
+    }
+    out += `[${id}]
 type = aor
 contact = sip:${esc(t.host)}:${t.port || 5060}
 qualify_frequency = 60
@@ -146,7 +175,7 @@ transport = transport-udp
 context = campaign-out
 disallow = all
 allow = ulaw,alaw
-outbound_auth = ${id}-auth
+${hasAuth ? `outbound_auth = ${id}-auth` : '; IP-authenticated - no outbound_auth'}
 aors = ${id}
 from_user = ${esc(t.user)}
 from_domain = ${esc(t.host)}
@@ -160,7 +189,7 @@ trust_id_outbound = yes
 [${id}]
 type = identify
 endpoint = ${id}
-match = ${esc(t.host)}
+match = ${[esc(t.host)].concat(String(t.matchIps || '').split(/[\s,]+/).filter(Boolean)).join(',')}
 `;
   }
 
@@ -292,7 +321,15 @@ async function diagnoseTrunk(id) {
   // Translate the response code into something actionable.
   const m = out.sip.match(/SIP\/2\.0 (40[0-9]|4[1-9][0-9]|5\d\d|6\d\d)[^\n]*/g);
   const codes = (m || []).map((x) => x.match(/SIP\/2\.0 (\d{3})/)[1]);
-  if (codes.includes('403')) out.hint = '403 Forbidden — the provider rejected the credentials or this server IP is not permitted to register. Check the username/password exactly, and whether the provider requires IP whitelisting.';
+  if (codes.includes('403') && !codes.includes('401') && !codes.includes('407')) {
+    // No challenge before the refusal: the provider never even asked for a
+    // password, so the password cannot be what it objects to.
+    out.hint = '403 Forbidden with no 401 challenge first — the provider refused before asking for credentials, '
+      + 'so this is policy, not a wrong password. Almost always it means the account is IP-authenticated '
+      + '(“IP to IP”) and does not accept REGISTER at all: untick “Register with the provider” on this trunk '
+      + 'and make sure this server’s public IP is the one on the account. The other cause is an IP that is not '
+      + 'authorised yet, or an account already registered from somewhere else.';
+  } else if (codes.includes('403')) out.hint = '403 Forbidden after a challenge — the credentials were read and rejected. Check the username/password exactly, and whether the provider expects a separate auth username.';
   else if (codes.includes('401') || codes.includes('407')) out.hint = '401/407 repeatedly — the auth challenge is being answered with the wrong password, or the provider expects a different auth username than the SIP user.';
   else if (codes.includes('404')) out.hint = '404 Not Found — the provider does not recognise this account on that host. Check the SIP host and username.';
   else if (codes.includes('408') || !out.sip.trim()) out.hint = 'No response — the REGISTER is not reaching the provider. Check outbound UDP 5060 and that the SIP host resolves.';

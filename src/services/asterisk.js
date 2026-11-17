@@ -154,6 +154,10 @@ expiration = 3600
     // With IP authentication there is nothing to authenticate against. Emitting
     // an auth section anyway is harmless (it only answers challenges), but a
     // trunk saved without a password must not get a half-filled one.
+    // A registering trunk is matched on its account name, so From must carry
+    // it. An IP-authenticated one is matched on source IP and usually wants a
+    // real number in From instead -- an account name there earns a 403 on the
+    // INVITE even though the trunk itself is accepted.
     const hasAuth = !!(t.user && t.pass);
     if (hasAuth) {
       out += `[${id}-auth]
@@ -177,7 +181,7 @@ disallow = all
 allow = ulaw,alaw
 ${hasAuth ? `outbound_auth = ${id}-auth` : '; IP-authenticated - no outbound_auth'}
 aors = ${id}
-from_user = ${esc(t.user)}
+from_user = ${esc(t.register ? t.user : (t.callerId || t.user))}
 from_domain = ${esc(t.host)}
 dtmf_mode = auto
 direct_media = no

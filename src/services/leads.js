@@ -1,0 +1,218 @@
+'use strict';
+/**
+ * Lead lists.
+ *
+ * Each list is named and carries a country + dial code. The dial code is what
+ * makes numbers dialable: CSVs routinely hold national numbers with no country
+ * code, and the old PBX importer mangled those by assuming +1 and stripping a
+ * leading "1" — turning German 15732742722 into 5732742722. Here the country
+ * is declared per list, so normalisation is deterministic.
+ *
+ * Metadata lives in data/leads/index.json; rows live one file per list so a
+ * 100k-row import doesn't bloat every read.
+ */
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+
+const DIR = process.env.LEADS_DIR || path.join(__dirname, '../../data/leads');
+const INDEX = path.join(DIR, 'index.json');
+const newId = () => crypto.randomBytes(6).toString('hex');
+
+const COUNTRIES = [
+  { code: '49', name: 'Germany' },      { code: '43', name: 'Austria' },
+  { code: '41', name: 'Switzerland' },  { code: '44', name: 'United Kingdom' },
+  { code: '1',  name: 'United States' },{ code: '1',  name: 'Canada' },
+  { code: '31', name: 'Netherlands' },  { code: '32', name: 'Belgium' },
+  { code: '33', name: 'France' },       { code: '34', name: 'Spain' },
+  { code: '39', name: 'Italy' },        { code: '351', name: 'Portugal' },
+  { code: '353', name: 'Ireland' },     { code: '45', name: 'Denmark' },
+  { code: '46', name: 'Sweden' },       { code: '47', name: 'Norway' },
+  { code: '48', name: 'Poland' },       { code: '420', name: 'Czechia' },
+  { code: '30', name: 'Greece' },       { code: '36', name: 'Hungary' },
+  { code: '40', name: 'Romania' },      { code: '358', name: 'Finland' },
+  { code: '61', name: 'Australia' },    { code: '64', name: 'New Zealand' },
+  { code: '91', name: 'India' },        { code: '971', name: 'UAE' },
+  { code: '27', name: 'South Africa' },
+];
+
+function ensure() { fs.mkdirSync(DIR, { recursive: true }); }
+
+function readIndex() {
+  ensure();
+  try { return JSON.parse(fs.readFileSync(INDEX, 'utf8')); } catch (e) { return []; }
+}
+function writeIndex(list) {
+  ensure();
+  const tmp = `${INDEX}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(list, null, 2));
+  fs.renameSync(tmp, INDEX);
+  return list;
+}
+
+const rowsPath = (id) => path.join(DIR, `${id}.json`);
+function readRows(id) {
+  try { return JSON.parse(fs.readFileSync(rowsPath(id), 'utf8')); } catch (e) { return []; }
+}
+function writeRows(id, rows) {
+  ensure();
+  const tmp = `${rowsPath(id)}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(rows));
+  fs.renameSync(tmp, rowsPath(id));
+}
+
+/**
+ * Normalise a phone number to full international form, no plus.
+ *
+ * dialCode is the list's country code. The number keeps every subscriber
+ * digit: only a national trunk "0" is dropped, and nothing is stripped on the
+ * assumption of a country.
+ */
+function normalizePhone(raw, dialCode, rowPrefix) {
+  if (raw == null) return '';
+  const str = String(raw).trim();
+  if (!str) return '';
+
+  const intl = str.startsWith('+') || /^00\d/.test(str);
+  let num = str.replace(/[^\d]/g, '');
+  if (!num) return '';
+
+  if (num.startsWith('00')) num = num.slice(2);
+  else if (intl) { /* already international, digits are complete */ }
+
+  // A per-row prefix column wins over the list default.
+  const cc = String(rowPrefix || dialCode || '').replace(/[^\d]/g, '');
+  if (!intl && cc && !num.startsWith(cc)) {
+    num = cc + num.replace(/^0/, '');   // drop national trunk 0
+  }
+  return num;
+}
+
+const ALIASES = {
+  phone: ['phone', 'phone_number', 'phonenumber', 'number', 'tel', 'telephone', 'mobile', 'cell', 'msisdn'],
+  name:  ['name', 'full_name', 'fullname', 'full name', 'contact', 'contact_name', 'contact name'],
+  first: ['first name', 'first_name', 'firstname', 'fname', 'given name', 'given_name'],
+  last:  ['last name', 'last_name', 'lastname', 'lname', 'surname', 'family name', 'family_name'],
+  company: ['company', 'business', 'organization', 'organisation', 'org'],
+  email: ['email', 'email_address', 'e-mail', 'mail'],
+  prefix: ['prefix', 'country_code', 'countrycode', 'country code', 'cc', 'dial_code', 'dialcode'],
+};
+
+function parseCSVLine(line) {
+  const out = []; let cur = '', q = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') { if (q && line[i + 1] === '"') { cur += '"'; i++; } else q = !q; }
+    else if (ch === ',' && !q) { out.push(cur); cur = ''; }
+    else cur += ch;
+  }
+  out.push(cur);
+  return out;
+}
+
+/** Import a CSV buffer into a new or existing list. */
+function importCSV(listId, csvText, { dialCode }) {
+  let text = String(csvText);
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);   // Excel BOM
+
+  const lines = text.split(/\r?\n/).filter((l) => l.trim());
+  if (lines.length < 2) return { ok: false, error: 'CSV needs a header row and at least one data row' };
+
+  const headers = parseCSVLine(lines[0])
+    .map((h) => h.trim().replace(/^"(.*)"$/, '$1').replace(/^﻿/, '').toLowerCase());
+  const find = (keys) => headers.findIndex((h) => keys.includes(h));
+
+  const iPhone = find(ALIASES.phone) >= 0 ? find(ALIASES.phone) : 0;
+  const iName = find(ALIASES.name);
+  const iFirst = find(ALIASES.first);
+  const iLast = find(ALIASES.last);
+  const iCompany = find(ALIASES.company);
+  const iEmail = find(ALIASES.email);
+  const iPrefix = find(ALIASES.prefix);
+
+  const cell = (c, i) => (i >= 0 && c[i] != null ? c[i].trim().replace(/^"(.*)"$/, '$1') : '');
+
+  const existing = readRows(listId);
+  const seen = new Set(existing.map((r) => r.phone));
+  const rows = [];
+  let imported = 0, dupes = 0, invalid = 0;
+
+  for (let i = 1; i < lines.length; i++) {
+    const c = parseCSVLine(lines[i]);
+    const phone = normalizePhone(cell(c, iPhone), dialCode, cell(c, iPrefix));
+    if (!phone || phone.length < 7) { invalid++; continue; }
+    if (seen.has(phone)) { dupes++; continue; }
+    seen.add(phone);
+
+    let name = cell(c, iName);
+    if (!name) name = [cell(c, iFirst), cell(c, iLast)].filter(Boolean).join(' ').trim();
+
+    rows.push({
+      phone, name,
+      company: cell(c, iCompany),
+      email: cell(c, iEmail),
+      status: 'pending', attempts: 0, outcome: '', lastAttempt: null,
+    });
+    imported++;
+  }
+
+  writeRows(listId, existing.concat(rows));
+  return {
+    ok: true, imported, dupes, invalid,
+    total: existing.length + rows.length,
+    detected: {
+      phone: headers[iPhone] || '(first column)',
+      name: iName >= 0 ? headers[iName] : (iFirst >= 0 ? `${headers[iFirst]}${iLast >= 0 ? ' + ' + headers[iLast] : ''}` : null),
+      prefix: iPrefix >= 0 ? headers[iPrefix] : null,
+    },
+  };
+}
+
+// ---------------------------------------------------------------- CRUD
+function list() {
+  return readIndex().map((l) => ({ ...l, total: readRows(l.id).length }));
+}
+function get(id) {
+  const meta = readIndex().find((l) => l.id === id);
+  return meta ? { ...meta, rows: readRows(id) } : null;
+}
+function create({ name, country, dialCode }) {
+  const idx = readIndex();
+  const rec = {
+    id: newId(),
+    name: (name || '').trim() || 'Untitled list',
+    country: (country || '').trim(),
+    dialCode: String(dialCode || '').replace(/[^\d]/g, ''),
+    createdAt: new Date().toISOString(),
+  };
+  idx.push(rec);
+  writeIndex(idx);
+  writeRows(rec.id, []);
+  return rec;
+}
+function update(id, patch) {
+  const idx = readIndex();
+  const rec = idx.find((l) => l.id === id);
+  if (!rec) return null;
+  if (patch.name != null) rec.name = String(patch.name).trim() || rec.name;
+  if (patch.country != null) rec.country = String(patch.country).trim();
+  if (patch.dialCode != null) rec.dialCode = String(patch.dialCode).replace(/[^\d]/g, '');
+  writeIndex(idx);
+  return rec;
+}
+function remove(id) {
+  writeIndex(readIndex().filter((l) => l.id !== id));
+  try { fs.unlinkSync(rowsPath(id)); } catch (e) {}
+  return { ok: true };
+}
+function stats(id) {
+  const rows = readRows(id);
+  const by = {};
+  for (const r of rows) by[r.status] = (by[r.status] || 0) + 1;
+  return { total: rows.length, by };
+}
+
+module.exports = {
+  DIR, COUNTRIES, list, get, create, update, remove, stats,
+  importCSV, readRows, writeRows, normalizePhone,
+};

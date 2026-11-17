@@ -1,0 +1,54 @@
+<%- include('head', { title: 'Leads', active: 'leads' }) %>
+<%- include('flash') %>
+<div class="section">
+  <div class="sec-head"><div class="sec-title">Lead lists</div>
+    <span class="muted" style="font-size:11px">Each list carries its own country, so numbers normalise correctly</span></div>
+  <div class="card">
+    <% if (!lists.length) { %>
+      <div class="empty">No lead lists yet. Create one below, then upload a CSV.</div>
+    <% } else { %>
+    <table class="tbl"><thead><tr>
+      <th>Name</th><th>Country</th><th>Dial code</th><th>Leads</th><th>Created</th><th></th>
+    </tr></thead><tbody>
+    <% lists.forEach(function(l){ %>
+      <tr>
+        <td><strong><%= l.name %></strong></td>
+        <td><%= l.country || '—' %></td>
+        <td class="mono">+<%= l.dialCode || '?' %></td>
+        <td><%= l.total %></td>
+        <td class="muted" style="font-size:11px"><%= l.createdAt.slice(0,10) %></td>
+        <td style="text-align:right;white-space:nowrap">
+          <a class="btn btn-sm" href="/leads/<%= l.id %>">Open</a>
+          <form class="inline-form" method="post" action="/leads/<%= l.id %>/delete"
+                onsubmit="return confirm('Delete list <%= l.name %> and all its leads?')">
+            <button class="btn btn-sm btn-danger" type="submit">Delete</button></form>
+        </td>
+      </tr>
+    <% }) %>
+    </tbody></table>
+    <% } %>
+  </div>
+</div>
+
+<div class="section">
+  <div class="sec-head"><div class="sec-title">New list</div></div>
+  <div class="card">
+    <form method="post" action="/leads/create">
+      <div class="grid-2">
+        <div class="form-group"><label class="form-label">List name</label>
+          <input class="form-input" name="name" placeholder="German Sales — November" required></div>
+        <div class="form-group"><label class="form-label">Country</label>
+          <select class="form-select" name="country" required>
+            <option value="">Select a country…</option>
+            <% countries.forEach(function(c){ %>
+              <option value="<%= c.code %>|<%= c.name %>"><%= c.name %> (+<%= c.code %>)</option>
+            <% }) %>
+          </select>
+          <span class="muted" style="font-size:10px">Applied to numbers that have no country code of their own.</span>
+        </div>
+      </div>
+      <button class="btn btn-primary" type="submit">Create list</button>
+    </form>
+  </div>
+</div>
+<%- include('foot') %>

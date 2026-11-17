@@ -1,0 +1,124 @@
+<%- include('head', { title: campaign ? campaign.name : 'New campaign', active: 'campaigns' }) %>
+<%- include('flash') %>
+<% var c = campaign || { id:'', name:'', trunkId:'', serverId:'', leadListId:'',
+                         ivr: defaults.ivr, pacing: defaults.pacing };
+   function sel(a,b){ return a===b ? 'selected' : ''; }
+   function audioOpts(current){
+     var h = '<option value="">— none —</option>';
+     files.forEach(function(f){
+       h += '<option value="'+f.soundId+'" '+(current===f.soundId?'selected':'')+'>'+
+            f.name+' ('+f.seconds+'s)</option>'; });
+     return h;
+   } %>
+<form method="post" action="/campaigns/save">
+<input type="hidden" name="id" value="<%= c.id %>">
+
+<div class="section">
+  <div class="sec-head"><div class="sec-title"><%= campaign ? 'Edit campaign' : 'New campaign' %></div>
+    <a class="sec-link" href="/campaigns">← All campaigns</a></div>
+  <div class="card">
+    <div class="grid-2">
+      <div class="form-group"><label class="form-label">Campaign name</label>
+        <input class="form-input" name="name" value="<%= c.name %>" placeholder="German Sales" required></div>
+      <div class="form-group"><label class="form-label">Lead list</label>
+        <select class="form-select" name="leadListId" required>
+          <option value="">Select…</option>
+          <% lists.forEach(function(l){ %>
+            <option value="<%= l.id %>" <%= sel(l.id, c.leadListId) %>><%= l.name %> — <%= l.total %> leads (+<%= l.dialCode %>)</option>
+          <% }) %>
+        </select>
+        <% if (!lists.length) { %><span class="muted" style="font-size:10px">No lists yet — <a href="/leads">create one</a>.</span><% } %>
+      </div>
+      <div class="form-group"><label class="form-label">Trunk <span class="muted">(who we dial through)</span></label>
+        <select class="form-select" name="trunkId" required>
+          <option value="">Select…</option>
+          <% (settings.trunks||[]).forEach(function(t){ %>
+            <option value="<%= t.id %>" <%= sel(t.id, c.trunkId) %>><%= t.name %> — <%= t.host %></option>
+          <% }) %>
+        </select></div>
+      <div class="form-group"><label class="form-label">Server <span class="muted">(where confirmed leads go)</span></label>
+        <select class="form-select" name="serverId" required>
+          <option value="">Select…</option>
+          <% (settings.servers||[]).forEach(function(s){ %>
+            <option value="<%= s.id %>" <%= sel(s.id, c.serverId) %>><%= s.name %> — ext <%= s.agentExten %></option>
+          <% }) %>
+        </select></div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="sec-head"><div class="sec-title">IVR flow</div>
+    <span class="muted" style="font-size:11px">What the lead hears at each step</span></div>
+  <div class="card">
+    <% if (!files.length) { %>
+      <div class="alert alert-warn">No audio uploaded — add files on the <a href="/audio">Audio</a> tab first.</div>
+    <% } %>
+    <div class="grid-2">
+      <div class="form-group"><label class="form-label">1. Greeting <span class="pill p-miss" style="font-size:9px">required</span></label>
+        <select class="form-select" name="greetingAudio"><%- audioOpts(c.ivr.greetingAudio) %></select>
+        <span class="muted" style="font-size:10px">Played on answer: "press 1 if interested". Replayed up to the limit below.</span></div>
+
+      <div class="form-group"><label class="form-label">2. Confirmed <span class="muted">(after pressing <%= c.ivr.confirmKey %>)</span></label>
+        <select class="form-select" name="confirmAudio"><%- audioOpts(c.ivr.confirmAudio) %></select>
+        <span class="muted" style="font-size:10px">"Thank you, connecting you now."</span></div>
+
+      <div class="form-group"><label class="form-label">3. Hold / waiting</label>
+        <select class="form-select" name="holdAudio"><%- audioOpts(c.ivr.holdAudio) %></select>
+        <span class="muted" style="font-size:10px">Loops while the agent's phone rings.</span></div>
+
+      <div class="form-group"><label class="form-label">4. Declined <span class="muted">(opt-out key)</span></label>
+        <select class="form-select" name="declineAudio"><%- audioOpts(c.ivr.declineAudio) %></select>
+        <span class="muted" style="font-size:10px">Played before hanging up; the lead is added to DNC.</span></div>
+
+      <div class="form-group"><label class="form-label">5. No response</label>
+        <select class="form-select" name="rejectAudio"><%- audioOpts(c.ivr.rejectAudio) %></select>
+        <span class="muted" style="font-size:10px">After the last greeting with no keypress — this is how voicemails end.</span></div>
+
+      <div class="form-group"><label class="form-label">6. No agent free</label>
+        <select class="form-select" name="busyAudio"><%- audioOpts(c.ivr.busyAudio) %></select>
+        <span class="muted" style="font-size:10px">Pressed 1 but every agent was busy. The lead is retried later.</span></div>
+    </div>
+
+    <div class="grid-3" style="margin-top:6px">
+      <div class="form-group"><label class="form-label">Confirm key</label>
+        <input class="form-input" name="confirmKey" value="<%= c.ivr.confirmKey %>" maxlength="1"></div>
+      <div class="form-group"><label class="form-label">Opt-out key</label>
+        <input class="form-input" name="optOutKey" value="<%= c.ivr.optOutKey %>" maxlength="1"></div>
+      <div class="form-group"><label class="form-label">Greetings before reject</label>
+        <input class="form-input" name="maxGreetings" type="number" min="1" max="5" value="<%= c.ivr.maxGreetings %>"></div>
+      <div class="form-group"><label class="form-label">Wait per greeting (s)</label>
+        <input class="form-input" name="waitSeconds" type="number" min="3" max="30" value="<%= c.ivr.waitSeconds %>"></div>
+      <div class="form-group"><label class="form-label">Agent ring timeout (s)</label>
+        <input class="form-input" name="agentRingSeconds" type="number" min="10" max="120" value="<%= c.ivr.agentRingSeconds %>"></div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="sec-head"><div class="sec-title">Pacing</div></div>
+  <div class="card">
+    <div class="grid-3">
+      <div class="form-group"><label class="form-label">Lines per agent</label>
+        <input class="form-input" name="linesPerAgent" type="number" min="1" max="50" value="<%= c.pacing.linesPerAgent %>">
+        <span class="muted" style="font-size:10px">1 = one call per free agent. Above 1 is predictive overdial — faster, but some confirmed callers find no agent free.</span></div>
+      <div class="form-group"><label class="form-label">Max concurrent calls</label>
+        <input class="form-input" name="maxConcurrent" type="number" min="1" max="200" value="<%= c.pacing.maxConcurrent %>">
+        <span class="muted" style="font-size:10px">Hard ceiling, whatever the ratio works out to.</span></div>
+      <div class="form-group"><label class="form-label">Calls/hour cap</label>
+        <input class="form-input" name="callsPerHourCap" type="number" min="0" value="<%= c.pacing.callsPerHourCap %>">
+        <span class="muted" style="font-size:10px">0 = uncapped.</span></div>
+      <div class="form-group"><label class="form-label">Retry attempts</label>
+        <input class="form-input" name="retryAttempts" type="number" min="0" max="5" value="<%= c.pacing.retryAttempts %>"></div>
+      <div class="form-group"><label class="form-label">Retry delay (min)</label>
+        <input class="form-input" name="retryDelayMinutes" type="number" min="5" max="1440" value="<%= c.pacing.retryDelayMinutes %>"></div>
+    </div>
+  </div>
+</div>
+
+<div class="section"><div class="card">
+  <button class="btn btn-primary" type="submit">Save campaign</button>
+  <a class="btn" href="/campaigns">Cancel</a>
+</div></div>
+</form>
+<%- include('foot') %>

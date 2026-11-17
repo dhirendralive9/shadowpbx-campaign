@@ -1,0 +1,36 @@
+<%- include('head', { title: 'Campaigns', active: 'campaigns' }) %>
+<%- include('flash') %>
+<div class="section">
+  <div class="sec-head"><div class="sec-title">Campaigns</div>
+    <a class="btn btn-sm btn-primary" href="/campaigns/new">+ New campaign</a></div>
+  <div class="card">
+    <% if (!campaigns.length) { %>
+      <div class="empty">No campaigns yet. A campaign ties together a trunk, a server, a lead list and the IVR flow.</div>
+    <% } else { %>
+    <table class="tbl"><thead><tr>
+      <th>Name</th><th>Trunk</th><th>Server</th><th>Leads</th><th>Pacing</th><th>Status</th><th></th>
+    </tr></thead><tbody>
+    <% campaigns.forEach(function(c){
+         var t=(settings.trunks||[]).find(function(x){return x.id===c.trunkId;});
+         var sv=(settings.servers||[]).find(function(x){return x.id===c.serverId;});
+         var ll=lists.find(function(x){return x.id===c.leadListId;}); %>
+      <tr>
+        <td><strong><%= c.name %></strong></td>
+        <td><%= t ? t.name : '<span class="pill p-err">missing</span>' %></td>
+        <td><%= sv ? sv.name : '<span class="pill p-err">missing</span>' %></td>
+        <td><%= ll ? ll.name + ' (' + ll.total + ')' : '<span class="pill p-err">missing</span>' %></td>
+        <td class="muted" style="font-size:11px"><%= c.pacing.linesPerAgent %>×/agent, max <%= c.pacing.maxConcurrent %></td>
+        <td><span class="pill <%= c.status==='running'?'p-ok':'p-gray' %>"><%= c.status %></span></td>
+        <td style="text-align:right;white-space:nowrap">
+          <a class="btn btn-sm" href="/campaigns/<%= c.id %>">Edit</a>
+          <form class="inline-form" method="post" action="/campaigns/<%= c.id %>/delete"
+                onsubmit="return confirm('Delete campaign <%= c.name %>?')">
+            <button class="btn btn-sm btn-danger" type="submit">Delete</button></form>
+        </td>
+      </tr>
+    <% }) %>
+    </tbody></table>
+    <% } %>
+  </div>
+</div>
+<%- include('foot') %>

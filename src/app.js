@@ -15,6 +15,8 @@ const { exec } = require('child_process');
 const store = require('./services/settings');
 const asterisk = require('./services/asterisk');
 const audio = require('./services/audio');
+const leads = require('./services/leads');
+const campaigns = require('./services/campaigns');
 
 const PORT = parseInt(process.env.PORT, 10) || 3000;
 const ARI_USER = process.env.ARI_USER || 'campaign';
@@ -89,6 +91,88 @@ app.get('/audio', auth, async (req, res) =>
 
 app.get('/ivr', auth, (req, res) =>
   res.render('ivr', base(req, { active: 'ivr', sub: 'ivr', files: audio.list() })));
+
+app.get('/leads', auth, (req, res) =>
+  res.render('leads', base(req, { active: 'leads', lists: leads.list(), countries: leads.COUNTRIES })));
+
+app.get('/leads/:id', auth, (req, res) => {
+  const l = leads.get(req.params.id);
+  if (!l) return res.redirect('/leads?err=' + encodeURIComponent('List not found'));
+  res.render('lead-detail', base(req, {
+    active: 'leads', list: l,
+    rows: l.rows.slice(0, 200), stats: leads.stats(l.id), countries: leads.COUNTRIES,
+  }));
+});
+
+app.get('/campaigns', auth, (req, res) =>
+  res.render('campaigns', base(req, {
+    active: 'campaigns', campaigns: campaigns.list(),
+    lists: leads.list(), files: audio.list(),
+  })));
+
+app.get('/campaigns/new', auth, (req, res) =>
+  res.render('campaign-edit', base(req, {
+    active: 'campaigns', campaign: null,
+    lists: leads.list(), files: audio.list(),
+    defaults: { ivr: campaigns.DEFAULT_IVR, pacing: campaigns.DEFAULT_PACING },
+  })));
+
+app.get('/campaigns/:id', auth, (req, res) => {
+  const c = campaigns.get(req.params.id);
+  if (!c) return res.redirect('/campaigns?err=' + encodeURIComponent('Campaign not found'));
+  res.render('campaign-edit', base(req, {
+    active: 'campaigns', campaign: c,
+    lists: leads.list(), files: audio.list(),
+    defaults: { ivr: campaigns.DEFAULT_IVR, pacing: campaigns.DEFAULT_PACING },
+  }));
+});
+
+// ---------------------------------------------------------------- leads
+app.post('/leads/create', auth, (req, res) => {
+  const cc = (req.body.country || '').split('|');
+  const rec = leads.create({ name: req.body.name, country: cc[1] || '', dialCode: cc[0] || '' });
+  res.redirect('/leads/' + rec.id + '?msg=' + encodeURIComponent('List created — now upload a CSV.'));
+});
+
+app.post('/leads/:id/upload', auth, upload.single('file'), (req, res) => {
+  const l = leads.get(req.params.id);
+  if (!l) return res.redirect('/leads?err=' + encodeURIComponent('List not found'));
+  if (!req.file) return res.redirect('/leads/' + l.id + '?err=' + encodeURIComponent('No file selected'));
+  let text = '';
+  try { text = require('fs').readFileSync(req.file.path, 'utf8'); }
+  catch (e) { return res.redirect('/leads/' + l.id + '?err=' + encodeURIComponent(e.message)); }
+  finally { try { require('fs').unlinkSync(req.file.path); } catch (e) {} }
+
+  const r = leads.importCSV(l.id, text, { dialCode: l.dialCode });
+  if (!r.ok) return res.redirect('/leads/' + l.id + '?err=' + encodeURIComponent(r.error));
+  const d = r.detected;
+  res.redirect('/leads/' + l.id + '?msg=' + encodeURIComponent(
+    `Imported ${r.imported} — ${r.dupes} duplicates, ${r.invalid} invalid. ` +
+    `Detected phone column "${d.phone}"${d.name ? `, name "${d.name}"` : ''}` +
+    `${d.prefix ? `, prefix "${d.prefix}"` : `, country code ${l.dialCode} applied`}.`));
+});
+
+app.post('/leads/:id/update', auth, (req, res) => {
+  const cc = (req.body.country || '').split('|');
+  leads.update(req.params.id, { name: req.body.name, country: cc[1], dialCode: cc[0] });
+  res.redirect('/leads/' + req.params.id + '?msg=' + encodeURIComponent('List updated.'));
+});
+
+app.post('/leads/:id/delete', auth, (req, res) => {
+  leads.remove(req.params.id);
+  res.redirect('/leads?msg=' + encodeURIComponent('List deleted.'));
+});
+
+// ---------------------------------------------------------------- campaigns
+app.post('/campaigns/save', auth, (req, res) => {
+  campaigns.save(req.body);
+  res.redirect('/campaigns?msg=' + encodeURIComponent('Campaign saved.'));
+});
+
+app.post('/campaigns/:id/delete', auth, (req, res) => {
+  campaigns.remove(req.params.id);
+  res.redirect('/campaigns?msg=' + encodeURIComponent('Campaign deleted.'));
+});
 
 // ---------------------------------------------------------------- trunks
 app.post('/trunks/save', auth, async (req, res) => {

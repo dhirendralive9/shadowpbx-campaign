@@ -10,7 +10,7 @@
  * Call control (originate, playback, DTMF, bridge) still goes over ARI — see
  * the campaign engine.
  */
-const { exec } = require('child_process');
+const { exec, execSync } = require('child_process');
 const fs = require('fs');
 
 const ASTERISK_ETC = process.env.ASTERISK_ETC || '/etc/asterisk';
@@ -208,21 +208,42 @@ function activeEndpoints(s) {
   };
 }
 
-/** Write pjsip.conf and reload. Returns {ok, message}. */
+/**
+ * Write pjsip.conf and reload.
+ *
+ * Always writes whatever is configured. A trunk with no server yet is
+ * perfectly valid config -- it should still register, because the server only
+ * matters at transfer time. Refusing to write until everything is filled in
+ * left Asterisk reading stale config and made a saved trunk look ignored.
+ * Anything still missing is reported, not used as a reason to do nothing.
+ */
 async function applySettings(s) {
-  const missing = require('./settings').validate(s);
-  if (missing.length) {
-    return { ok: false, message: `Cannot apply — missing: ${missing.join(', ')}` };
-  }
   const target = `${ASTERISK_ETC}/pjsip.conf`;
   try {
     fs.writeFileSync(target, renderPjsip(s), { mode: 0o640 });
   } catch (e) {
     return { ok: false, message: `Could not write ${target}: ${e.message} (is the service running as root?)` };
   }
+
+  // Written as root at 0640, so without this the asterisk user cannot read its
+  // own config and every endpoint silently disappears.
+  try {
+    const uid = parseInt(execSync('id -u asterisk').toString().trim(), 10);
+    const gid = parseInt(execSync('id -g asterisk').toString().trim(), 10);
+    if (!Number.isNaN(uid) && !Number.isNaN(gid)) fs.chownSync(target, uid, gid);
+  } catch (e) {
+    // No asterisk user (or not root) — leave ownership alone rather than fail.
+  }
+
   const r = await cli('pjsip reload');
   if (!r.ok) return { ok: false, message: `Config written but reload failed: ${r.out}` };
-  return { ok: true, message: 'Configuration applied and PJSIP reloaded.' };
+
+  const missing = require('./settings').validate(s);
+  return {
+    ok: true,
+    message: 'Saved. PJSIP reloaded.' +
+      (missing.length ? ` Still needed before calls can be placed: ${missing.join(', ')}.` : ''),
+  };
 }
 
 /** Sound files available for the greeting dropdown. */

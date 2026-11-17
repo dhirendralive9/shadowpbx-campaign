@@ -14,7 +14,8 @@
 
 <div class="section">
   <div class="sec-head"><div class="sec-title">Trunk registration</div>
-    <a class="sec-link" href="/trunks">Manage</a></div>
+    <span><button class="btn btn-sm" id="reapply" type="button">Re-apply config</button>
+    <a class="sec-link" href="/trunks" style="margin-left:10px">Manage</a></span></div>
   <div class="card"><table class="tbl"><thead><tr><th>Trunk</th><th>Server URI</th><th>Status</th></tr></thead>
     <tbody id="regs"><tr><td colspan="3" class="muted">loading…</td></tr></tbody></table></div>
 </div>
@@ -63,6 +64,13 @@ function refresh(){
   }).catch(function(){});
 }
 refresh(); setInterval(refresh,5000);
+document.getElementById('reapply').onclick=function(){
+  var b=this; b.disabled=true; b.textContent='applying…';
+  fetch('/api/reload',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
+    b.textContent='Re-apply config'; b.disabled=false;
+    alert(d.message||d.error||'done'); refresh();
+  }).catch(function(e){ b.textContent='Re-apply config'; b.disabled=false; alert('failed: '+e.message); });
+};
 document.getElementById('call').onclick=function(){
   var n=document.getElementById('num').value.trim(); if(!n) return;
   var st=document.getElementById('callstate'),out=document.getElementById('callout'),b=this;

@@ -248,6 +248,11 @@ app.get('/api/status', auth, async (req, res) => {
   }
 });
 
+app.post('/api/reload', auth, async (req, res) => {
+  const r = await asterisk.applySettings(store.load());
+  res.json(r);
+});
+
 app.post('/api/test-call', auth, (req, res) => {
   const number = String(req.body.number || '').replace(/[^\d+]/g, '');
   if (!number) return res.status(400).json({ ok: false, error: 'number required' });

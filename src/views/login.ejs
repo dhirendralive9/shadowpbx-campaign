@@ -1,0 +1,14 @@
+<%- include('layout_head') %>
+<div class="login-wrap">
+  <form class="card login" method="post" action="/login">
+    <div class="brand"><span class="bar"></span>ShadowPBX <span class="tag">Campaign</span></div>
+    <% if (error) { %><div class="alert err"><%= error %></div><% } %>
+    <label class="lbl">Username</label>
+    <input class="inp" name="username" autocomplete="username" autofocus required>
+    <label class="lbl">Password</label>
+    <input class="inp" name="password" type="password" autocomplete="current-password" required>
+    <button class="btn primary" type="submit">Sign in</button>
+    <p class="muted sm">Uses the ARI credentials from <code>.env</code>.</p>
+  </form>
+</div>
+</body></html>

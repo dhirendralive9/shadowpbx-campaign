@@ -1,0 +1,86 @@
+<%- include('layout_head') %>
+<%- include('nav') %>
+<main class="wrap">
+  <% if (flash) { %><div class="alert ok"><%= flash %></div><% } %>
+  <% if (flashErr) { %><div class="alert err"><%= flashErr %></div><% } %>
+  <% if (missing.length) { %>
+    <div class="alert warn">
+      Not ready to place calls — missing: <strong><%= missing.join(', ') %></strong>.
+      <a href="/settings">Fill these in</a>.
+    </div>
+  <% } %>
+
+  <div class="tiles" id="tiles">
+    <div class="tile"><div class="v" id="t-ast">…</div><div class="k">Asterisk</div></div>
+    <div class="tile"><div class="v" id="t-trunk">…</div><div class="k">Trunk</div></div>
+    <div class="tile"><div class="v" id="t-ari">…</div><div class="k">ARI modules</div></div>
+    <div class="tile"><div class="v" id="t-chan">…</div><div class="k">Active channels</div></div>
+  </div>
+
+  <section class="card">
+    <h2>Trunk registration</h2>
+    <table class="tbl" id="regs"><thead><tr><th>Name</th><th>Server</th><th>Status</th></tr></thead>
+    <tbody><tr><td colspan="3" class="muted">loading…</td></tr></tbody></table>
+  </section>
+
+  <section class="card">
+    <h2>Endpoints</h2>
+    <table class="tbl" id="eps"><thead><tr><th>Endpoint</th><th>State</th><th>Channels</th></tr></thead>
+    <tbody><tr><td colspan="3" class="muted">loading…</td></tr></tbody></table>
+  </section>
+
+  <section class="card">
+    <h2>Test call</h2>
+    <p class="muted sm">Places one call: dials, plays the greeting, waits for a keypress, and on
+      <strong><%= settings.ivr.confirmKey %></strong> bridges to extension <strong><%= settings.pbx.agentExten %></strong>.</p>
+    <div class="row">
+      <input class="inp" id="num" placeholder="49XXXXXXXXXX" style="max-width:260px">
+      <button class="btn primary" id="call">Place test call</button>
+      <span id="callstate" class="muted sm"></span>
+    </div>
+    <pre id="callout" class="out" hidden></pre>
+  </section>
+</main>
+<script>
+async function refresh(){
+  try{
+    const r = await fetch('/api/status'); const d = await r.json();
+    if(!d.ok) return;
+    const s = d.status;
+    const set=(id,html,cls)=>{const e=document.getElementById(id);e.innerHTML=html;e.className='v '+(cls||'');};
+    set('t-ast', s.running?'Running':'Stopped', s.running?'ok':'err');
+    const reg = (s.registrations||[]).find(x=>/Registered/i.test(x.status));
+    set('t-trunk', reg?'Registered':((s.registrations||[])[0]?.status||'None'), reg?'ok':'err');
+    set('t-ari', s.ari.loaded, s.ari.ok?'ok':'err');
+    set('t-chan', s.channels||0);
+
+    const rb=document.querySelector('#regs tbody');
+    rb.innerHTML = (s.registrations||[]).length
+      ? s.registrations.map(x=>`<tr><td>${x.name}</td><td class="mono">${x.uri}</td>
+          <td><span class="pill ${/Registered/i.test(x.status)?'ok':'err'}">${x.status}</span></td></tr>`).join('')
+      : '<tr><td colspan="3" class="muted">No registrations configured</td></tr>';
+
+    const eb=document.querySelector('#eps tbody');
+    eb.innerHTML = (s.endpoints||[]).length
+      ? s.endpoints.map(x=>`<tr><td>${x.name}</td><td>${x.state}</td><td>${x.channels}</td></tr>`).join('')
+      : '<tr><td colspan="3" class="muted">No endpoints</td></tr>';
+  }catch(e){}
+}
+refresh(); setInterval(refresh, 5000);
+
+document.getElementById('call').onclick = async ()=>{
+  const n=document.getElementById('num').value.trim();
+  if(!n) return;
+  const st=document.getElementById('callstate'), out=document.getElementById('callout');
+  st.textContent='calling… (up to 2 min)'; out.hidden=true;
+  const btn=document.getElementById('call'); btn.disabled=true;
+  try{
+    const r=await fetch('/api/test-call',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({number:n})});
+    const d=await r.json();
+    st.textContent=d.result||'done';
+    out.textContent=d.output||''; out.hidden=!d.output;
+  }catch(e){ st.textContent='failed: '+e.message; }
+  btn.disabled=false;
+};
+</script>
+</body></html>

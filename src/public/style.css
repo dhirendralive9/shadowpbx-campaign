@@ -1,0 +1,53 @@
+:root{--bg:#0e1116;--panel:#161b22;--panel2:#1c2230;--line:#262d3a;--fg:#e6edf3;--muted:#8b949e;
+--accent:#4f8cff;--ok:#2ea043;--err:#f85149;--warn:#d29922;--radius:10px}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.mono,code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 20px;
+background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:8px;font-weight:600;letter-spacing:.2px}
+.brand .bar{width:4px;height:18px;background:var(--accent);border-radius:2px;display:inline-block}
+.brand .tag{font-size:11px;color:var(--muted);border:1px solid var(--line);padding:1px 6px;border-radius:999px}
+nav{display:flex;gap:18px}
+nav a{color:var(--muted);text-decoration:none;padding:4px 0;border-bottom:2px solid transparent}
+nav a:hover{color:var(--fg)} nav a.on{color:var(--fg);border-bottom-color:var(--accent)}
+.wrap{max-width:980px;margin:0 auto;padding:20px 16px 56px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:16px}
+.card h2{margin:0 0 14px;font-size:15px;font-weight:600}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+label{display:block;font-size:12px;color:var(--muted)}
+.inp{width:100%;margin-top:5px;background:var(--panel2);border:1px solid var(--line);color:var(--fg);
+padding:9px 10px;border-radius:7px;font-size:13px;outline:none}
+.inp:focus{border-color:var(--accent)}
+.chk{display:flex;align-items:center;gap:8px;margin-top:14px;color:var(--fg);font-size:13px}
+.btn{background:var(--panel2);border:1px solid var(--line);color:var(--fg);padding:9px 16px;
+border-radius:7px;cursor:pointer;font-size:13px}
+.btn:hover{border-color:var(--accent)} .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+.tile .v{font-size:24px;font-weight:650;line-height:1.1}
+.tile .v.ok{color:var(--ok)} .tile .v.err{color:var(--err)}
+.tile .k{color:var(--muted);font-size:12px;margin-top:4px}
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{text-align:left;color:var(--muted);font-weight:500;font-size:11px;letter-spacing:.4px;
+text-transform:uppercase;padding:6px 8px;border-bottom:1px solid var(--line)}
+.tbl td{padding:9px 8px;border-bottom:1px solid var(--line)}
+.pill{padding:2px 9px;border-radius:999px;font-size:11px;font-weight:600;border:1px solid}
+.pill.ok{color:var(--ok);border-color:var(--ok);background:rgba(46,160,67,.12)}
+.pill.err{color:var(--err);border-color:var(--err);background:rgba(248,81,73,.12)}
+.alert{padding:10px 13px;border-radius:8px;margin-bottom:14px;border:1px solid;font-size:13px}
+.alert.ok{color:var(--ok);border-color:rgba(46,160,67,.4);background:rgba(46,160,67,.1)}
+.alert.err{color:var(--err);border-color:rgba(248,81,73,.4);background:rgba(248,81,73,.1)}
+.alert.warn{color:var(--warn);border-color:rgba(210,153,34,.4);background:rgba(210,153,34,.1)}
+.alert a{color:inherit}
+.muted{color:var(--muted)} .sm{font-size:12px}
+.out{background:#0b0e13;border:1px solid var(--line);border-radius:8px;padding:12px;
+font-size:12px;max-height:320px;overflow:auto;white-space:pre-wrap;margin-top:12px}
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.login{width:100%;max-width:340px}
+.login .brand{margin-bottom:18px} .login .lbl{margin-top:12px}
+.login .btn{width:100%;margin-top:18px}
+code{background:var(--panel2);padding:1px 5px;border-radius:4px;font-size:12px}
+@media(max-width:600px){.wrap{padding:14px 12px 40px}.top{padding:10px 14px}}

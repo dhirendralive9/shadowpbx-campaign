@@ -1,0 +1,20 @@
+[Unit]
+Description=ShadowPBX Campaign Module (UI + ARI engine)
+After=network.target asterisk.service
+Wants=asterisk.service
+
+[Service]
+Type=simple
+# Runs as root: it writes /etc/asterisk/pjsip.conf and runs `asterisk -rx`.
+# This box is a dedicated appliance; if you'd rather not, give the asterisk
+# user write access to /etc/asterisk and sudo rights for `asterisk -rx`.
+User=root
+WorkingDirectory=/root/shadowpbx-campaign
+ExecStart=/usr/bin/node src/app.js
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

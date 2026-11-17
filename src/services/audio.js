@@ -98,8 +98,34 @@ function filePath(file) {
   return fs.existsSync(p) ? p : null;
 }
 
+/**
+ * Copy the bundled test tone into the sound library on startup.
+ *
+ * A brand-new install has no audio at all, which makes the one thing you want
+ * to do first -- prove a trunk carries a call you can hear -- impossible until
+ * you have uploaded something. The file ships in the repo already at 8kHz mono
+ * 16-bit, so it needs no conversion and works before sox is even installed.
+ *
+ * Never overwrites: once it is there it is the user's to rename or replace.
+ */
+function seedBundled() {
+  const src = path.join(__dirname, '../../test/test.wav');
+  const dest = path.join(DIR, 'test.wav');
+  try {
+    if (!fs.existsSync(src) || fs.existsSync(dest)) return false;
+    ensureDir();
+    fs.copyFileSync(src, dest);
+    fs.chmodSync(dest, 0o644);
+    return true;
+  } catch (e) {
+    // A missing sounds directory on a box without Asterisk yet is not worth
+    // refusing to start over.
+    return false;
+  }
+}
+
 function haveSox() {
   return new Promise((r) => execFile('which', ['sox'], (e) => r(!e)));
 }
 
-module.exports = { DIR, list, convert, rename, remove, filePath, haveSox, ensureDir };
+module.exports = { DIR, list, convert, rename, remove, filePath, haveSox, ensureDir, seedBundled };

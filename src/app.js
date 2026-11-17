@@ -335,6 +335,8 @@ app.post('/api/test-call', auth, (req, res) => {
     });
 });
 
+if (audio.seedBundled()) console.log('Installed the bundled test tone as campaign/test.');
+
 app.listen(PORT, () => {
   console.log(`ShadowPBX Campaign UI on http://0.0.0.0:${PORT}  (login: ${ARI_USER})`);
   console.log(`Settings: ${store.FILE}`);

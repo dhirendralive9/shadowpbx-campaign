@@ -26,6 +26,21 @@ const ARI_PASS = process.env.ARI_PASS;
 const ARI_APP = process.env.ARI_APP || 'shadowpbx-campaign';
 
 const jobs = new Map();
+
+/**
+ * Build the dial string ARI needs for a PJSIP trunk.
+ *
+ * Asterisk reads `PJSIP/<endpoint>/<x>` as "endpoint, then AOR or sip: URI", so
+ * `PJSIP/trunk-abc/919778988634` looks for an AOR *named* 919778988634 and the
+ * call dies before any INVITE leaves. The trunk form is `PJSIP/<number>@<endpoint>`
+ * -- the one `channel originate` was proven with against this carrier, E.164 with
+ * a leading +.
+ */
+function dialString(endpoint, number) {
+  const n = String(number).replace(/[^\d]/g, '');
+  const m = /^PJSIP\/(.+)$/.exec(endpoint);
+  return m ? `PJSIP/+${n}@${m[1]}` : `${endpoint}/${n}`;
+}
 const newId = () => crypto.randomBytes(5).toString('hex');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -215,7 +230,7 @@ async function run(job) {
     return finish(job, false, e.message);
   }
 
-  log(job, `Dialling ${job.number} via ${job.endpoint}`, 'dialing');
+  log(job, `Dialling ${dialString(job.endpoint, job.number)}`, 'dialing');
 
   const chan = client.Channel();
   chan.on('ChannelStateChange', (evt, c) => {
@@ -234,7 +249,7 @@ async function run(job) {
 
   try {
     await chan.originate({
-      endpoint: `${job.endpoint}/${job.number}`,
+      endpoint: dialString(job.endpoint, job.number),
       app: ARI_APP,
       appArgs: `test,${job.id}`,
       callerId: job.callerId || undefined,

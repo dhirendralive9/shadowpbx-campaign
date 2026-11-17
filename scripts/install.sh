@@ -124,6 +124,9 @@ chmod 640 /etc/asterisk/pjsip.conf /etc/asterisk/ari.conf 2>/dev/null || true
 
 say "Creating sounds directory"
 install -d -o asterisk -g asterisk /var/lib/asterisk/sounds/campaign 2>/dev/null || mkdir -p /var/lib/asterisk/sounds/campaign
+# Built-in test tone (already 8kHz mono 16-bit). The app also restores it on start.
+install -m 644 -o asterisk -g asterisk test/test.wav /var/lib/asterisk/sounds/campaign/test.wav 2>/dev/null \
+  || install -m 644 test/test.wav /var/lib/asterisk/sounds/campaign/test.wav
 
 say "Installing Node dependencies"
 npm install --omit=dev --no-audit --no-fund --silent
@@ -153,6 +156,8 @@ Install finished.
        ufw allow 10000:20000/udp
   4. Prove press-1 against your own mobile:
        node src/press1-test.js 49XXXXXXXXXX
+     or from the Asterisk CLI, without the app (press 1 when it plays):
+       asterisk -rx "channel originate PJSIP/+49XXXXXXXXXX@trunk-<id> extension s@dtmf-test"
 
   Watch live:  asterisk -rvvv
 ────────────────────────────────────────────────────────────

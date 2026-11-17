@@ -15,6 +15,21 @@
  */
 'use strict';
 
+/**
+ * Build the dial string ARI needs for a PJSIP trunk.
+ *
+ * Asterisk reads `PJSIP/<endpoint>/<x>` as "endpoint, then AOR or sip: URI", so
+ * `PJSIP/trunk-abc/919778988634` looks for an AOR *named* 919778988634 and the
+ * call dies before any INVITE leaves. The trunk form is `PJSIP/<number>@<endpoint>`
+ * -- the one `channel originate` was proven with against this carrier, E.164 with
+ * a leading +.
+ */
+function dialString(endpoint, number) {
+  const n = String(number).replace(/[^\d]/g, '');
+  const m = /^PJSIP\/(.+)$/.exec(endpoint);
+  return m ? `PJSIP/+${n}@${m[1]}` : `${endpoint}/${n}`;
+}
+
 require('dotenv').config();
 const ari = require('ari-client');
 
@@ -154,7 +169,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   log(`dialing ${target} via ${TRUNK_ENDPOINT} ...`);
   try {
     await client.channels.originate({
-      endpoint: `${TRUNK_ENDPOINT}/${target}`,
+      endpoint: dialString(TRUNK_ENDPOINT, target),
       app: ARI_APP,
       callerId: CALLER_ID,
       timeout: 45,

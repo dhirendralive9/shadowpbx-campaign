@@ -16,7 +16,8 @@
     </tr></thead><tbody>
     <% files.forEach(function(f){ var inUse = settings.ivr.greeting === f.soundId; %>
       <tr>
-        <td><strong><%= f.name %></strong> <% if (inUse) { %><span class="pill p-ok">in use</span><% } %></td>
+        <td><strong><%= f.name %></strong> <% if (inUse) { %><span class="pill p-ok">in use</span><% } %>
+          <% if (f.builtin) { %><span class="pill">built-in</span><% } %></td>
         <td class="mono"><%= f.soundId %></td>
         <td><%= f.seconds %>s</td>
         <td class="muted"><%= Math.round(f.bytes/1024) %> KB</td>
@@ -24,10 +25,14 @@
         <td style="text-align:right;white-space:nowrap">
           <audio controls preload="none" src="/audio/<%= encodeURIComponent(f.file) %>/play"
                  style="height:28px;vertical-align:middle;max-width:180px"></audio>
+          <% if (f.builtin) { %>
+            <span class="muted" style="font-size:11px" title="Shipped with the app; always available for test calls">locked</span>
+          <% } else { %>
           <button class="btn btn-sm" onclick="renameFile('<%= f.file %>','<%= f.name %>')">Rename</button>
           <form class="inline-form" method="post" action="/audio/<%= encodeURIComponent(f.file) %>/delete"
                 onsubmit="return confirm('Delete <%= f.name %>?')">
             <button class="btn btn-sm btn-danger" type="submit">Delete</button></form>
+          <% } %>
         </td>
       </tr>
     <% }) %>

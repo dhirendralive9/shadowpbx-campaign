@@ -13,12 +13,19 @@ const { execFile } = require('child_process');
 const DIR = process.env.CAMPAIGN_SOUNDS || '/var/lib/asterisk/sounds/campaign';
 const SAFE = /^[a-zA-Z0-9][a-zA-Z0-9 _-]{0,60}$/;
 
+// Shipped with the app and managed by it: always present, cannot be deleted,
+// renamed or overwritten from the UI. Lower-case, compared case-insensitively.
+const BUILTIN = new Set(['test.wav']);
+const isBuiltin = (file) => BUILTIN.has(String(file || '').toLowerCase());
+const LOCKED = (file) => `${file} is built-in and cannot be changed or deleted`;
+
 function ensureDir() {
   fs.mkdirSync(DIR, { recursive: true });
 }
 
 function list() {
   ensureDir();
+  seedBundled();   // self-heal if the built-in file was removed behind our back
   try {
     return fs.readdirSync(DIR)
       .filter((f) => /\.wav$/i.test(f))
@@ -26,6 +33,7 @@ function list() {
         const st = fs.statSync(path.join(DIR, f));
         return {
           file: f,
+          builtin: isBuiltin(f),
           name: f.replace(/\.wav$/i, ''),
           // How the IVR refers to it — Asterisk wants no extension.
           soundId: `campaign/${f.replace(/\.wav$/i, '')}`,
@@ -50,7 +58,14 @@ function safeName(name) {
 function convert(srcPath, destName) {
   return new Promise((resolve) => {
     const name = safeName(destName);
-    if (!name) return resolve({ ok: false, error: 'Invalid name — letters, numbers, spaces, - and _ only' });
+    if (!name) {
+      try { fs.unlinkSync(srcPath); } catch (e) {}
+      return resolve({ ok: false, error: 'Invalid name — letters, numbers, spaces, - and _ only' });
+    }
+    if (isBuiltin(`${name}.wav`)) {
+      try { fs.unlinkSync(srcPath); } catch (e) {}
+      return resolve({ ok: false, error: `"${name}" is a built-in sound — pick another name` });
+    }
     ensureDir();
     const dest = path.join(DIR, `${name}.wav`);
     execFile('sox', [srcPath, '-r', '8000', '-c', '1', '-b', '16', dest],
@@ -70,6 +85,8 @@ function rename(oldFile, newName) {
   const name = safeName(newName);
   if (!name) return { ok: false, error: 'Invalid name' };
   if (!/^[^/\\]+\.wav$/i.test(oldFile)) return { ok: false, error: 'Invalid file' };
+  if (isBuiltin(oldFile)) return { ok: false, error: LOCKED(oldFile) };
+  if (isBuiltin(`${name}.wav`)) return { ok: false, error: `"${name}" is reserved for a built-in sound` };
   const from = path.join(DIR, oldFile);
   const to = path.join(DIR, `${name}.wav`);
   if (!fs.existsSync(from)) return { ok: false, error: 'File not found' };
@@ -84,6 +101,7 @@ function rename(oldFile, newName) {
 
 function remove(file) {
   if (!/^[^/\\]+\.wav$/i.test(file)) return { ok: false, error: 'Invalid file' };
+  if (isBuiltin(file)) return { ok: false, error: LOCKED(file) };
   try {
     fs.unlinkSync(path.join(DIR, file));
     return { ok: true };
@@ -106,13 +124,15 @@ function filePath(file) {
  * you have uploaded something. The file ships in the repo already at 8kHz mono
  * 16-bit, so it needs no conversion and works before sox is even installed.
  *
- * Never overwrites: once it is there it is the user's to rename or replace.
+ * It is a built-in: restored whenever it is missing or differs from the bundled
+ * copy, and the UI/API refuse to delete, rename or overwrite it.
  */
 function seedBundled() {
   const src = path.join(__dirname, '../../test/test.wav');
   const dest = path.join(DIR, 'test.wav');
   try {
-    if (!fs.existsSync(src) || fs.existsSync(dest)) return false;
+    if (!fs.existsSync(src)) return false;
+    if (fs.existsSync(dest) && fs.statSync(dest).size === fs.statSync(src).size) return false;
     ensureDir();
     fs.copyFileSync(src, dest);
     fs.chmodSync(dest, 0o644);
@@ -128,4 +148,4 @@ function haveSox() {
   return new Promise((r) => execFile('which', ['sox'], (e) => r(!e)));
 }
 
-module.exports = { DIR, list, convert, rename, remove, filePath, haveSox, ensureDir, seedBundled };
+module.exports = { DIR, isBuiltin, list, convert, rename, remove, filePath, haveSox, ensureDir, seedBundled };

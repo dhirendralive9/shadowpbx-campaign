@@ -58,7 +58,11 @@ apt-get update -qq
 # Ubuntu, so it is optional — never let it fail the whole install.
 # ---------------------------------------------------------------
 say "Installing Asterisk"
-if ! apt-get install -y -qq asterisk >/dev/null 2>&1; then
+# Already present and runnable? Nothing to do. Re-running the installer
+# to rewrite config should not redo the repo/package dance.
+if command -v asterisk >/dev/null 2>&1 && asterisk -V >/dev/null 2>&1; then
+  echo "    Already installed: $(asterisk -V)"
+elif ! apt-get install -y -qq asterisk >/dev/null 2>&1; then
   echo
   warn "apt could not install 'asterisk'. Diagnostics:"
   apt-cache policy asterisk || true

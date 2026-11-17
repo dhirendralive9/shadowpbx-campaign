@@ -248,6 +248,11 @@ app.get('/api/status', auth, async (req, res) => {
   }
 });
 
+app.post('/api/trunks/:id/reregister', auth, async (req, res) => {
+  try { res.json({ ok: true, ...(await asterisk.reRegister(req.params.id)) }); }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 app.get('/api/trunks/:id/diagnose', auth, async (req, res) => {
   try { res.json({ ok: true, ...(await asterisk.diagnoseTrunk(req.params.id)) }); }
   catch (e) { res.status(500).json({ ok: false, error: e.message }); }

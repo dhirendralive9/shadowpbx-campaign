@@ -122,6 +122,7 @@ transport = transport-udp
 outbound_auth = ${id}-auth
 server_uri = sip:${esc(t.host)}
 client_uri = sip:${esc(t.user)}@${esc(t.host)}
+endpoint = ${id}
 retry_interval = 60
 forbidden_retry_interval = 600
 expiration = 3600
@@ -299,6 +300,25 @@ async function diagnoseTrunk(id) {
   return out;
 }
 
+
+/**
+ * Force a registration attempt now.
+ *
+ * After an auth rejection PJSIP sets forbidden_retry_interval (600s) and will
+ * not retry before then, so a corrected password looks like it changed
+ * nothing. Unregister + register clears that wait.
+ */
+async function reRegister(id) {
+  const reg = `trunk-${id}`;
+  await cli(`pjsip send unregister ${reg}`);
+  await sleep(600);
+  const r = await cli(`pjsip send register ${reg}`);
+  await sleep(2500);
+  const detail = await cli(`pjsip show registration ${reg}`);
+  const status = (detail.out.match(/\b(Registered|Rejected|Unregistered|Sent|Failed|No Auth)\b/) || [])[1] || 'Unknown';
+  return { ok: r.ok, status, detail: detail.out };
+}
+
 /** Sound files available for the greeting dropdown. */
 function listSounds() {
   const dir = `${SOUNDS_DIR}/campaign`;
@@ -312,4 +332,4 @@ function listSounds() {
   }
 }
 
-module.exports = { cli, status, isRunning, renderPjsip, activeEndpoints, applySettings, listSounds, diagnoseTrunk, logTail, SOUNDS_DIR };
+module.exports = { cli, status, isRunning, renderPjsip, activeEndpoints, applySettings, listSounds, diagnoseTrunk, reRegister, logTail, SOUNDS_DIR };

@@ -32,6 +32,15 @@ The campaign server asks the main PBX to **reserve** an agent at the moment the
 lead presses 1, and only transfers if it gets one back — so two simultaneous
 press-1s can't race for the same agent and leave someone on dead air.
 
+## Asterisk is no longer in Debian/Ubuntu repos
+
+Asterisk was removed from Debian (and is being removed from Ubuntu), so
+`apt install asterisk` fails on Debian 13+ with "no installation candidate".
+`scripts/install.sh` detects this and falls back to `scripts/install-asterisk-source.sh`,
+which builds the current LTS from source with the ARI modules enabled.
+
+On Debian 12 (bookworm) the package still exists and is used directly.
+
 ## Quick start
 
 ```bash

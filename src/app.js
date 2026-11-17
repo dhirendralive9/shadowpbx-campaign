@@ -19,6 +19,21 @@ const leads = require('./services/leads');
 const campaigns = require('./services/campaigns');
 const testcall = require('./services/testcall');
 
+// swagger-client (inside ari-client) throws from a callback when ARI cannot be
+// read, which no promise can catch. Losing the whole UI -- and every login
+// session with it -- over a diagnosable ARI problem is the wrong trade, so log
+// that one specific failure and keep serving. Anything else still kills the
+// process, so real bugs are not hidden.
+process.on('uncaughtException', (err) => {
+  const msg = String((err && err.message) || err);
+  if (/Can't read swagger JSON/i.test(msg)) {
+    console.error(`[ari] ${msg} -- ARI is not reachable; the test call will report it.`);
+    return;
+  }
+  console.error(err);
+  process.exit(1);
+});
+
 const PORT = parseInt(process.env.PORT, 10) || 3000;
 const ARI_USER = process.env.ARI_USER || 'campaign';
 const ARI_PASS = process.env.ARI_PASS;

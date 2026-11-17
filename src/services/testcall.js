@@ -57,10 +57,49 @@ function reap() {
 // ------------------------------------------------------------------ ARI
 let clientP = null;
 
+/**
+ * Plain HTTP check of ARI before handing over to ari-client.
+ *
+ * ari-client fetches the API description with swagger-client, and when that
+ * fetch fails swagger-client *throws from inside a callback*: no promise sees it,
+ * nothing here can catch it, and the whole Node process dies -- which also wipes
+ * the in-memory login sessions, so the UI shows a login page instead of an error.
+ * Doing the same request ourselves first turns every one of those failures into
+ * an ordinary message that names the thing to fix.
+ */
+async function preflight() {
+  const auth = Buffer.from(`${ARI_USER}:${ARI_PASS}`).toString('base64');
+  let r;
+  try {
+    r = await fetch(`${ARI_URL}/ari/api-docs/resources.json`, {
+      headers: { Authorization: `Basic ${auth}` },
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch (e) {
+    const code = (e.cause && e.cause.code) || e.name;
+    throw new Error(
+      `nothing answered at ${ARI_URL} (${code}). Asterisk's HTTP server is off or on another port: `
+      + 'check /etc/asterisk/http.conf (enabled=yes, bindaddr=127.0.0.1, bindport=8088), '
+      + 'then run: asterisk -rx "http show status"');
+  }
+  if (r.status === 401) {
+    throw new Error(
+      `ARI rejected the login "${ARI_USER}". ARI_PASS in .env must equal the password of `
+      + `[${ARI_USER}] in /etc/asterisk/ari.conf. Check with: asterisk -rx "ari show users"`);
+  }
+  if (r.status === 404) {
+    throw new Error(
+      'the HTTP server is up but ARI is not loaded. Run: asterisk -rx "module show like res_ari" '
+      + 'and make sure /etc/asterisk/ari.conf has enabled = yes.');
+  }
+  if (!r.ok) throw new Error(`ARI answered HTTP ${r.status} at ${ARI_URL}/ari/api-docs/resources.json`);
+}
+
 function connect() {
   if (!ARI_PASS) return Promise.reject(new Error('ARI_PASS is not set in .env'));
   if (clientP) return clientP;
-  clientP = withTimeout(ari.connect(ARI_URL, ARI_USER, ARI_PASS), 15000, 'ARI did not respond within 15s')
+  clientP = preflight()
+    .then(() => withTimeout(ari.connect(ARI_URL, ARI_USER, ARI_PASS), 15000, 'ARI did not respond within 15s'))
     .then(async (c) => {
       c.on('StasisStart', onStasisStart);
       // A dropped websocket must not leave a dead client cached, or every later

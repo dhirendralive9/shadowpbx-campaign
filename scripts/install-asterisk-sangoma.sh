@@ -60,12 +60,24 @@ if grep -qiE 'EXPKEYSIG|KEYEXPIRED' /tmp/sangoma-apt.log; then
 fi
 
 say "Installing Asterisk 22"
-if ! apt-get install -y -qq asterisk22 asterisk22-core asterisk22-configs >/dev/null 2>&1; then
+# libxslt1.1 and liburiparser1 are NOT pulled in automatically — without
+# them the asterisk binary dies with "libxslt.so.1: cannot open shared
+# object file" the first time you run it.
+if ! apt-get install -y -qq asterisk22 asterisk22-core asterisk22-configs libxslt1.1 liburiparser1 >/dev/null 2>&1; then
   warn "Package install failed. Diagnostics:"
   apt-cache policy asterisk22 || true
   rm -f /etc/apt/sources.list.d/sangoma-asterisk.list
   apt-get update -qq || true
   die "could not install from Sangoma repo — use: sudo bash scripts/install-asterisk-source.sh"
+fi
+
+say "Checking the asterisk binary runs (catches missing shared libraries)"
+if ! asterisk -V >/dev/null 2>&1; then
+  warn "asterisk binary will not start:"
+  asterisk -V 2>&1 | head -3 || true
+  warn "installing the usual missing libraries"
+  apt-get install -y -qq libxslt1.1 liburiparser1 libedit2 libjansson4 >/dev/null 2>&1 || true
+  asterisk -V >/dev/null 2>&1 || die "asterisk still will not start — send Claude the output of: asterisk -V"
 fi
 
 say "Verifying ARI support"

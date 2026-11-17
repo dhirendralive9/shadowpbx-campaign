@@ -178,7 +178,27 @@ function openTest(id,name){
   document.getElementById('test-timeline').style.display='none';
   sec.scrollIntoView({behavior:'smooth'});
 }
+function api(url,opts){
+  var ctl=new AbortController(); var t=setTimeout(function(){ctl.abort();},15000);
+  opts=opts||{}; opts.signal=ctl.signal; opts.credentials='same-origin';
+  return fetch(url,opts).then(function(r){
+    clearTimeout(t);
+    if(!/json/.test(r.headers.get('content-type')||'')){
+      throw new Error('server answered '+r.status+(r.redirected?' after redirecting to '+r.url+' (session expired - log in again)':' with a non-JSON page'));
+    }
+    return r.json();
+  }).catch(function(e){
+    clearTimeout(t);
+    throw (e&&e.name==='AbortError')?new Error('no response from the server within 15s'):e;
+  });
+}
+function testFail(msg){
+  var btn=document.getElementById('test-go');
+  btn.disabled=false; btn.textContent='Place test call';
+  document.getElementById('test-result').innerHTML='<div class="alert alert-err">'+msg+'</div>';
+}
 function runTest(){
+  if(testPoll){clearTimeout(testPoll);testPoll=null;}
   var id=document.getElementById('test-trunk').value;
   var btn=document.getElementById('test-go');
   var box=document.getElementById('test-result');
@@ -186,25 +206,22 @@ function runTest(){
             sound:document.getElementById('test-sound').value,
             waitSeconds:document.getElementById('test-wait').value};
   btn.disabled=true; btn.textContent='Calling…';
+  document.getElementById('test-timeline').style.display='none';
   box.innerHTML='<div class="alert alert-warn">Placing the call…</div>';
-  fetch('/api/trunks/'+id+'/test-call',
-        {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
-   .then(function(r){return r.json();})
+  api('/api/trunks/'+id+'/test-call',
+      {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
    .then(function(d){
-     if(!d.ok){ btn.disabled=false; btn.textContent='Place test call';
-       box.innerHTML='<div class="alert alert-err">'+d.error+'</div>'; return; }
-     pollTest(d.jobId);
+     if(!d.ok) return testFail(d.error||'The server refused the test call.');
+     pollTest(d.jobId,0,Date.now());
    })
-   .catch(function(e){ btn.disabled=false; btn.textContent='Place test call';
-     box.innerHTML='<div class="alert alert-err">'+e.message+'</div>'; });
+   .catch(function(e){ testFail('Could not start the test: '+e.message); });
 }
-function pollTest(jobId){
+function pollTest(jobId,fails,t0){
   var btn=document.getElementById('test-go');
   var box=document.getElementById('test-result');
   var tl=document.getElementById('test-timeline');
-  fetch('/api/test-call/'+jobId).then(function(r){return r.json();}).then(function(d){
-    if(!d.ok){ box.innerHTML='<div class="alert alert-err">'+d.error+'</div>';
-      btn.disabled=false; btn.textContent='Place test call'; return; }
+  api('/api/test-call/'+jobId).then(function(d){
+    if(!d.ok) return testFail(d.error||'The test was lost on the server.');
     tl.style.display='';
     tl.textContent=(d.events||[]).map(function(e){
       return '+'+(e.at/1000).toFixed(1)+'s  '+e.text; }).join('\n');
@@ -214,9 +231,13 @@ function pollTest(jobId){
       box.innerHTML='<div class="alert '+(d.passed?'alert-ok':'alert-err')+'">'+d.result+'</div>';
       testPoll=null; return;
     }
+    if(Date.now()-t0>180000) return testFail('Gave up waiting after 3 minutes (last state: '+d.state+').');
     box.innerHTML='<div class="alert alert-warn">'+d.state+'…</div>';
-    testPoll=setTimeout(function(){pollTest(jobId);},1000);
-  }).catch(function(){ testPoll=setTimeout(function(){pollTest(jobId);},2000); });
+    testPoll=setTimeout(function(){pollTest(jobId,0,t0);},1000);
+  }).catch(function(e){
+    if(fails>=3) return testFail('Lost contact with the server while waiting for the result: '+e.message);
+    testPoll=setTimeout(function(){pollTest(jobId,fails+1,t0);},1500);
+  });
 }
 </script>
 

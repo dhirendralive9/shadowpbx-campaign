@@ -282,6 +282,7 @@ app.post('/api/trunks/:id/test-call', auth, (req, res) => {
   const sound = String(req.body.sound || '').trim();
   if (!sound) return res.status(400).json({ ok: false, error: 'Pick an audio file to play.' });
 
+  console.log(`[test] request: trunk=${trunk.id} number=${number} sound=${sound}`);
   try {
     const job = testcall.start({
       number,

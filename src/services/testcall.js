@@ -43,6 +43,9 @@ function dialString(endpoint, number) {
 }
 const newId = () => crypto.randomBytes(5).toString('hex');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const withTimeout = (p, ms, msg) => Promise.race([
+  p, new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), ms)),
+]);
 
 // Keep the last few jobs only -- this is a diagnostic, not a call log.
 function reap() {
@@ -57,14 +60,14 @@ let clientP = null;
 function connect() {
   if (!ARI_PASS) return Promise.reject(new Error('ARI_PASS is not set in .env'));
   if (clientP) return clientP;
-  clientP = ari.connect(ARI_URL, ARI_USER, ARI_PASS)
+  clientP = withTimeout(ari.connect(ARI_URL, ARI_USER, ARI_PASS), 15000, 'ARI did not respond within 15s')
     .then(async (c) => {
       c.on('StasisStart', onStasisStart);
       // A dropped websocket must not leave a dead client cached, or every later
       // test fails with no way to recover short of restarting the service.
       c.on('WebSocketClose', () => { clientP = null; });
       c.on('WebSocketError', () => { clientP = null; });
-      await c.start(ARI_APP);
+      await withTimeout(c.start(ARI_APP), 15000, 'registering the ARI app timed out after 15s');
       return c;
     })
     .catch((e) => {
@@ -81,6 +84,7 @@ function log(job, text, state) {
   if (job.finished) return;
   if (state) job.state = state;
   job.events.push({ at: Date.now() - job.startedAt, text });
+  console.log(`[test ${job.id}] ${text}`);
 }
 
 function finish(job, ok, result) {
@@ -90,6 +94,7 @@ function finish(job, ok, result) {
   job.state = 'done';
   job.result = result;
   job.events.push({ at: Date.now() - job.startedAt, text: result });
+  console.log(`[test ${job.id}] DONE ok=${ok}: ${result}`);
 }
 
 /**

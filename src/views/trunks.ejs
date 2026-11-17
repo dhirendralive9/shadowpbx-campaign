@@ -21,6 +21,7 @@
                  data-mode="<%= t.register ? 'register' : 'ip' %>">—</span></td>
         <td style="text-align:right;white-space:nowrap">
           <button class="btn btn-sm" onclick="editTrunk('<%= t.id %>')">Edit</button>
+          <button class="btn btn-sm" onclick="openTest('<%= t.id %>','<%= t.name %>')">Test call</button>
           <button class="btn btn-sm" onclick="diagnose('<%= t.id %>','<%= t.name %>')">Diagnose</button>
           <% if (t.register) { %>
             <button class="btn btn-sm" onclick="reReg('<%= t.id %>', this)">Re-register</button>
@@ -131,6 +132,92 @@ var t_id=document.getElementById('t-id'),t_name=document.getElementById('t-name'
   }).catch(function(){});
   setTimeout(poll,5000);
 })();
+</script>
+
+<div class="section" id="test-section" style="display:none">
+  <div class="sec-head"><div class="sec-title" id="test-title">Test call</div>
+    <button class="btn btn-sm" type="button" onclick="document.getElementById('test-section').style.display='none'">Close</button></div>
+  <div class="card">
+    <p class="muted" style="font-size:12px;margin:0 0 12px">
+      Calls a number through this trunk and plays the audio you choose, then waits for a keypress.
+      Answer it yourself and press <strong>1</strong> — that proves the trunk places calls, the audio is
+      audible, and DTMF survives the carrier, which are three separate things that can fail on their own.
+    </p>
+    <input type="hidden" id="test-trunk">
+    <div class="grid-3">
+      <div class="form-group"><label class="form-label">Number to call</label>
+        <input class="form-input" id="test-number" placeholder="491515302325">
+        <span class="muted" style="font-size:11px">Full number with country code, digits only.</span></div>
+      <div class="form-group"><label class="form-label">Audio to play</label>
+        <select class="form-select" id="test-sound">
+          <% if (!sounds.length) { %><option value="">No audio uploaded yet</option><% } %>
+          <% sounds.forEach(function(a){ %>
+            <option value="<%= a.soundId %>"><%= a.name %> (<%= a.seconds %>s)</option>
+          <% }) %>
+        </select>
+        <span class="muted" style="font-size:11px">Upload more on the Audio tab.</span></div>
+      <div class="form-group"><label class="form-label">Wait for a key (seconds)</label>
+        <input class="form-input" id="test-wait" type="number" value="8" min="3" max="30"></div>
+    </div>
+    <button class="btn btn-primary" id="test-go" onclick="runTest()">Place test call</button>
+    <span class="muted" style="font-size:11px;margin-left:8px">Your phone will ring within a few seconds.</span>
+    <div id="test-result" style="margin-top:14px"></div>
+    <pre class="out-pre" id="test-timeline" style="display:none"></pre>
+  </div>
+</div>
+
+<script>
+var testPoll=null;
+function openTest(id,name){
+  if(testPoll){clearTimeout(testPoll);testPoll=null;}
+  var sec=document.getElementById('test-section');
+  sec.style.display='';
+  document.getElementById('test-title').textContent='Test call — '+name;
+  document.getElementById('test-trunk').value=id;
+  document.getElementById('test-result').innerHTML='';
+  document.getElementById('test-timeline').style.display='none';
+  sec.scrollIntoView({behavior:'smooth'});
+}
+function runTest(){
+  var id=document.getElementById('test-trunk').value;
+  var btn=document.getElementById('test-go');
+  var box=document.getElementById('test-result');
+  var body={number:document.getElementById('test-number').value,
+            sound:document.getElementById('test-sound').value,
+            waitSeconds:document.getElementById('test-wait').value};
+  btn.disabled=true; btn.textContent='Calling…';
+  box.innerHTML='<div class="alert alert-warn">Placing the call…</div>';
+  fetch('/api/trunks/'+id+'/test-call',
+        {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+   .then(function(r){return r.json();})
+   .then(function(d){
+     if(!d.ok){ btn.disabled=false; btn.textContent='Place test call';
+       box.innerHTML='<div class="alert alert-err">'+d.error+'</div>'; return; }
+     pollTest(d.jobId);
+   })
+   .catch(function(e){ btn.disabled=false; btn.textContent='Place test call';
+     box.innerHTML='<div class="alert alert-err">'+e.message+'</div>'; });
+}
+function pollTest(jobId){
+  var btn=document.getElementById('test-go');
+  var box=document.getElementById('test-result');
+  var tl=document.getElementById('test-timeline');
+  fetch('/api/test-call/'+jobId).then(function(r){return r.json();}).then(function(d){
+    if(!d.ok){ box.innerHTML='<div class="alert alert-err">'+d.error+'</div>';
+      btn.disabled=false; btn.textContent='Place test call'; return; }
+    tl.style.display='';
+    tl.textContent=(d.events||[]).map(function(e){
+      return '+'+(e.at/1000).toFixed(1)+'s  '+e.text; }).join('\n');
+    tl.scrollTop=tl.scrollHeight;
+    if(d.finished){
+      btn.disabled=false; btn.textContent='Place test call';
+      box.innerHTML='<div class="alert '+(d.passed?'alert-ok':'alert-err')+'">'+d.result+'</div>';
+      testPoll=null; return;
+    }
+    box.innerHTML='<div class="alert alert-warn">'+d.state+'…</div>';
+    testPoll=setTimeout(function(){pollTest(jobId);},1000);
+  }).catch(function(){ testPoll=setTimeout(function(){pollTest(jobId);},2000); });
+}
 </script>
 
 <div class="section" id="diag-section" style="display:none">

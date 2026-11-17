@@ -17,6 +17,7 @@ const asterisk = require('./services/asterisk');
 const audio = require('./services/audio');
 const leads = require('./services/leads');
 const campaigns = require('./services/campaigns');
+const testcall = require('./services/testcall');
 
 const PORT = parseInt(process.env.PORT, 10) || 3000;
 const ARI_USER = process.env.ARI_USER || 'campaign';
@@ -78,7 +79,7 @@ app.get('/', auth, (req, res) =>
   res.render('dashboard', base(req, { active: 'dashboard' })));
 
 app.get('/trunks', auth, (req, res) =>
-  res.render('trunks', base(req, { active: 'trunks', sub: 'trunks' })));
+  res.render('trunks', base(req, { active: 'trunks', sub: 'trunks', sounds: audio.list() })));
 
 app.get('/servers', auth, (req, res) =>
   res.render('servers', base(req, { active: 'servers', sub: 'servers' })));
@@ -261,6 +262,52 @@ app.get('/api/trunks/:id/diagnose', auth, async (req, res) => {
 app.post('/api/reload', auth, async (req, res) => {
   const r = await asterisk.applySettings(store.load());
   res.json(r);
+});
+
+/**
+ * Place a test call down one specific trunk with one specific sound file.
+ *
+ * Deliberately independent of campaign config: a trunk has to be provable on
+ * its own, before there is a server, a lead list or anything else to go wrong.
+ */
+app.post('/api/trunks/:id/test-call', auth, (req, res) => {
+  const s = store.load();
+  const trunk = (s.trunks || []).find((t) => t.id === req.params.id);
+  if (!trunk) return res.status(404).json({ ok: false, error: 'No such trunk' });
+
+  const number = String(req.body.number || '').replace(/[^\d]/g, '');
+  if (number.length < 7) {
+    return res.status(400).json({ ok: false, error: 'Enter the full number including country code, digits only.' });
+  }
+  const sound = String(req.body.sound || '').trim();
+  if (!sound) return res.status(400).json({ ok: false, error: 'Pick an audio file to play.' });
+
+  try {
+    const job = testcall.start({
+      number,
+      trunkName: trunk.name,
+      endpoint: `PJSIP/trunk-${trunk.id}`,
+      sound,
+      callerId: (trunk.callerId || '').replace(/[^\d]/g, ''),
+      confirmKey: req.body.confirmKey || s.ivr.confirmKey,
+      optOutKey: s.ivr.optOutKey,
+      maxGreetings: req.body.maxGreetings || s.ivr.maxGreetings,
+      waitSeconds: req.body.waitSeconds || s.ivr.waitSeconds,
+    });
+    res.json({ ok: true, jobId: job.id });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.get('/api/test-call/:jobId', auth, (req, res) => {
+  const job = testcall.get(req.params.jobId);
+  if (!job) return res.status(404).json({ ok: false, error: 'Unknown or expired test' });
+  res.json({
+    ok: true,
+    state: job.state, finished: job.finished, passed: job.ok, result: job.result,
+    number: job.number, sound: job.sound, digits: job.digits, events: job.events,
+  });
 });
 
 app.post('/api/test-call', auth, (req, res) => {

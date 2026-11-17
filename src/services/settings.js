@@ -91,6 +91,8 @@ function persist(s) {
 }
 
 // ---------------------------------------------------------------- trunks
+const truthy = (v) => v === true || v === 'true' || v === 'on' || v === '1' || v === 'yes';
+
 function saveTrunk(data) {
   const s = load();
   const clean = {
@@ -99,11 +101,13 @@ function saveTrunk(data) {
     user: (data.user || '').trim(),
     port: parseInt(data.port, 10) || 5060,
     transport: data.transport || 'udp',
-    // A checkbox sends nothing when unticked, so 'absent' must mean false --
-    // otherwise registration can never be turned off, which is fatal for a
-    // provider that authenticates by IP and rejects REGISTER outright.
-    register: data.register === true || data.register === 'true'
-              || data.register === 'on' || data.register === '1',
+    // A checkbox sends nothing when unticked, so the form carries a hidden
+    // "false" in front of it -- otherwise registration could never be turned
+    // off, which is fatal for a provider that authenticates by IP. When the box
+    // IS ticked the browser submits both, and the body parser hands back an
+    // array, so the last value is the one that counts.
+    register: truthy(Array.isArray(data.register)
+      ? data.register[data.register.length - 1] : data.register),
     // Extra IPs the provider sends from, when they differ from the SIP host.
     matchIps: (data.matchIps || '').trim(),
     callerId: (data.callerId || '').trim(),

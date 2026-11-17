@@ -84,11 +84,18 @@ say "Verifying ARI support"
 systemctl enable asterisk >/dev/null 2>&1 || true
 systemctl restart asterisk >/dev/null 2>&1 || true
 sleep 4
-if asterisk -rx "module show like res_ari" 2>/dev/null | grep -qi res_ari; then
-  echo "    ARI modules loaded."
+# res_ari_model.so loads by itself even when the rest of ARI is absent, so
+# match the two modules that actually matter rather than the name prefix.
+if asterisk -rx "module show like ari" 2>/dev/null | grep -qE '^res_ari\.so[[:space:]].*Running' \
+   && asterisk -rx "module show like stasis" 2>/dev/null | grep -qE '^res_stasis\.so[[:space:]].*Running'; then
+  echo "    res_ari.so and res_stasis.so are loaded."
 else
-  warn "ARI modules not confirmed yet — check after install.sh writes the config:"
-  warn "  asterisk -rx \"module show like res_ari\""
+  warn "These packages did not provide ARI (res_ari.so / res_stasis.so). On disk:"
+  ls /usr/lib/asterisk/modules/ 2>/dev/null | grep -E 'ari|stasis' | sed 's/^/      /' || echo "      (none)"
+  warn "Available asterisk packages in this repo:"
+  apt-cache search '^asterisk' 2>/dev/null | head -20 | sed 's/^/      /' || true
+  die "Asterisk without ARI is no use here. Build one with it:
+     sudo bash scripts/install-asterisk-source.sh"
 fi
 
 say "Installed: $(asterisk -V 2>/dev/null || echo 'version unknown')"

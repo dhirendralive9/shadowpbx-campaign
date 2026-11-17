@@ -10,6 +10,30 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$HERE"
 
+# ---------------------------------------------------------------
+# Is ARI actually usable? Not "is something named res_ari* loaded" --
+# res_ari_model.so ships and loads on its own while the rest of ARI is
+# absent, so a `module show like res_ari` grep reports success on a box
+# where nothing can place a call. Name the two modules that matter.
+# ---------------------------------------------------------------
+ari_modules_ok() {
+  asterisk -rx "module show like ari" 2>/dev/null \
+    | grep -qE '^res_ari\.so[[:space:]].*Running' || return 1
+  asterisk -rx "module show like stasis" 2>/dev/null \
+    | grep -qE '^res_stasis\.so[[:space:]].*Running' || return 1
+}
+
+ari_missing_report() {
+  warn "ARI is not usable on this Asterisk. Present modules:"
+  asterisk -rx "module show like ari" 2>/dev/null | sed 's/^/      /' || true
+  asterisk -rx "module show like stasis" 2>/dev/null | sed 's/^/      /' || true
+  warn "On disk:"
+  ls /usr/lib/asterisk/modules/ 2>/dev/null | grep -E 'ari|stasis' | sed 's/^/      /' || echo "      (none)"
+  warn "res_ari.so and res_stasis.so are missing or will not load. This build of"
+  warn "Asterisk was made without ARI, which the campaign engine cannot work without."
+  warn "Build one with ARI instead:  sudo bash scripts/install-asterisk-source.sh"
+}
+
 say()  { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m    %s\033[0m\n' "$*"; }
 die()  { printf '\n\033[1;31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
@@ -99,12 +123,13 @@ say "Versions: asterisk $(asterisk -V 2>/dev/null | awk '{print $2}' || echo '?'
 # ---------------------------------------------------------------
 say "Verifying ARI support is present"
 systemctl start asterisk >/dev/null 2>&1 || true
-sleep 2
-if asterisk -rx "module show like res_ari" 2>/dev/null | grep -qi 'res_ari'; then
-  echo "    ARI modules present."
+# Asterisk needs a moment after start before the CLI answers.
+for _ in $(seq 1 15); do ari_modules_ok && break; sleep 1; done
+if ari_modules_ok; then
+  echo "    res_ari.so and res_stasis.so are loaded."
 else
-  warn "Could not confirm res_ari modules. If the proof fails to connect to ARI,"
-  warn "run: asterisk -rx \"module show like res_ari\"  and send Claude the output."
+  ari_missing_report
+  die "ARI is required — stopping before any config is overwritten."
 fi
 
 say "Backing up stock Asterisk config"
@@ -135,6 +160,22 @@ say "Restarting Asterisk"
 systemctl enable asterisk >/dev/null 2>&1 || true
 systemctl restart asterisk
 sleep 3
+
+say "Checking ARI answers over HTTP"
+# The modules can be loaded and ARI still unreachable: http.conf disabled, a
+# different port, or ARI_PASS not matching ari.conf. One request settles it.
+ARI_CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 \
+  -u "${ARI_USER:-campaign}:${ARI_PASS}" \
+  "http://127.0.0.1:${ARI_PORT:-8088}/ari/api-docs/resources.json" || echo 000)
+case "$ARI_CODE" in
+  200) echo "    ARI responded 200 — the app can drive calls." ;;
+  401) die "ARI rejected the login \"${ARI_USER:-campaign}\". ARI_PASS in .env must match the
+     password for that user in /etc/asterisk/ari.conf (asterisk -rx \"ari show users\")." ;;
+  404) die "ARI is not enabled: /etc/asterisk/ari.conf needs enabled = yes (then: asterisk -rx \"module reload res_ari.so\")." ;;
+  000) die "Nothing answered on 127.0.0.1:${ARI_PORT:-8088}. Asterisk's HTTP server is off:
+     check /etc/asterisk/http.conf, then: asterisk -rx \"http show status\"" ;;
+  *)   warn "ARI answered HTTP $ARI_CODE — the test call will report the detail." ;;
+esac
 
 say "Trunk registration"
 asterisk -rx "pjsip show registrations" 2>/dev/null || warn "could not query Asterisk"

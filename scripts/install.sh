@@ -63,12 +63,17 @@ if ! apt-get install -y -qq asterisk >/dev/null 2>&1; then
   warn "apt could not install 'asterisk'. Diagnostics:"
   apt-cache policy asterisk || true
   echo
-  die "Asterisk unavailable from the configured repositories.
-     Paste the output above to Claude. Most likely fixes:
-       Ubuntu : add-apt-repository universe && apt update
-       Debian : check /etc/apt/sources.list has the 'main' component
-     If this image has no Asterisk package at all, we switch to the
-     official Sangoma repo or a source build — tell Claude."
+  warn "No asterisk package available from apt."
+  warn "Asterisk has been REMOVED from Debian's repositories (and is being"
+  warn "removed from Ubuntu), so on Debian 13+ there is nothing to install."
+  say "Trying Sangoma's official Asterisk repository first"
+  if bash "$HERE/scripts/install-asterisk-sangoma.sh"; then
+    say "Asterisk installed from Sangoma packages"
+  else
+    warn "Sangoma repo unusable — building from source instead (several minutes)"
+    bash "$HERE/scripts/install-asterisk-source.sh" \
+      || die "source build failed — send Claude the output above"
+  fi
 fi
 
 # Optional extras: present on Debian, absent on Ubuntu. Ignore failures.

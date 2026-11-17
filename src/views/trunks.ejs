@@ -1,0 +1,105 @@
+<%- include('head', { title: 'Trunks', active: 'trunks' }) %>
+<%- include('flash') %>
+<div class="section">
+  <div class="sec-head"><div class="sec-title">SIP Trunks</div>
+    <span class="muted" style="font-size:11px"><%= settings.trunks.length %> saved — the active one places calls</span></div>
+  <div class="card">
+    <% if (!settings.trunks.length) { %>
+      <div class="empty">No trunks yet. Add one below.</div>
+    <% } else { %>
+    <table class="tbl"><thead><tr>
+      <th>Name</th><th>Host</th><th>Username</th><th>Transport</th><th>Register</th><th>Status</th><th></th>
+    </tr></thead><tbody>
+    <% settings.trunks.forEach(function(t){ var on = t.id === settings.activeTrunkId; %>
+      <tr>
+        <td><strong><%= t.name %></strong> <% if (on) { %><span class="pill p-ok">active</span><% } %></td>
+        <td class="mono"><%= t.host %>:<%= t.port %></td>
+        <td class="mono"><%= t.user %></td>
+        <td><%= (t.transport||'udp').toUpperCase() %></td>
+        <td><%= t.register ? 'Yes' : 'No' %></td>
+        <td><span class="pill p-gray" data-reg="trunk-<%= t.id %>">—</span></td>
+        <td style="text-align:right;white-space:nowrap">
+          <button class="btn btn-sm" onclick="editTrunk('<%= t.id %>')">Edit</button>
+          <% if (!on) { %>
+            <form class="inline-form" method="post" action="/trunks/<%= t.id %>/activate">
+              <button class="btn btn-sm" type="submit">Use this</button></form>
+          <% } %>
+          <form class="inline-form" method="post" action="/trunks/<%= t.id %>/delete"
+                onsubmit="return confirm('Delete trunk <%= t.name %>?')">
+            <button class="btn btn-sm btn-danger" type="submit">Delete</button></form>
+        </td>
+      </tr>
+    <% }) %>
+    </tbody></table>
+    <% } %>
+  </div>
+</div>
+
+<div class="section">
+  <div class="sec-head"><div class="sec-title" id="form-title">Add a trunk</div></div>
+  <div class="card">
+    <form method="post" action="/trunks/save" id="trunk-form">
+      <input type="hidden" name="id" id="t-id">
+      <div class="grid-3">
+        <div class="form-group"><label class="form-label">Name</label>
+          <input class="form-input" name="name" id="t-name" placeholder="German VoIP" required></div>
+        <div class="form-group"><label class="form-label">SIP host</label>
+          <input class="form-input" name="host" id="t-host" placeholder="sip.provider.de" required></div>
+        <div class="form-group"><label class="form-label">Username</label>
+          <input class="form-input" name="user" id="t-user" required></div>
+        <div class="form-group"><label class="form-label">Password</label>
+          <input class="form-input" name="pass" id="t-pass" type="password" placeholder="required"></div>
+        <div class="form-group"><label class="form-label">Port</label>
+          <input class="form-input" name="port" id="t-port" type="number" value="5060"></div>
+        <div class="form-group"><label class="form-label">Transport</label>
+          <select class="form-select" name="transport" id="t-transport">
+            <option value="udp">UDP</option><option value="tcp">TCP</option><option value="tls">TLS</option>
+          </select></div>
+        <div class="form-group"><label class="form-label">Caller ID</label>
+          <input class="form-input" name="callerId" id="t-cid" placeholder="4915XXXXXXXX"></div>
+      </div>
+      <label class="form-label" style="display:flex;align-items:center;gap:8px;margin:10px 0 16px">
+        <input type="checkbox" name="register" id="t-register" value="true" checked> Register with the provider</label>
+      <button class="btn btn-primary" type="submit">Save trunk</button>
+      <button class="btn" type="button" onclick="resetTrunk()">Cancel</button>
+      <span class="muted" style="font-size:11px;margin-left:8px">Saving rewrites pjsip.conf and reloads PJSIP.</span>
+    </form>
+  </div>
+</div>
+
+<script>
+var TRUNKS = <%- JSON.stringify(settings.trunks.map(function(t){
+  return {id:t.id,name:t.name,host:t.host,user:t.user,port:t.port,transport:t.transport,
+          register:t.register,callerId:t.callerId}; })) %>;
+function editTrunk(id){
+  var t = TRUNKS.find(function(x){return x.id===id;}); if(!t) return;
+  t_id.value=t.id; t_name.value=t.name||''; t_host.value=t.host||''; t_user.value=t.user||'';
+  t_port.value=t.port||5060; t_transport.value=t.transport||'udp'; t_cid.value=t.callerId||'';
+  t_register.checked=!!t.register; t_pass.placeholder='•••••••• (unchanged)'; t_pass.value='';
+  document.getElementById('form-title').textContent='Edit trunk — '+(t.name||'');
+  document.getElementById('trunk-form').scrollIntoView({behavior:'smooth'});
+}
+function resetTrunk(){
+  document.getElementById('trunk-form').reset(); t_id.value='';
+  t_pass.placeholder='required';
+  document.getElementById('form-title').textContent='Add a trunk';
+}
+var t_id=document.getElementById('t-id'),t_name=document.getElementById('t-name'),
+ t_host=document.getElementById('t-host'),t_user=document.getElementById('t-user'),
+ t_pass=document.getElementById('t-pass'),t_port=document.getElementById('t-port'),
+ t_transport=document.getElementById('t-transport'),t_cid=document.getElementById('t-cid'),
+ t_register=document.getElementById('t-register');
+// live registration status
+(function poll(){
+  fetch('/api/status').then(r=>r.json()).then(function(d){
+    if(!d.ok) return;
+    (d.status.registrations||[]).forEach(function(r){
+      var el=document.querySelector('[data-reg="'+r.name+'"]');
+      if(el){ el.textContent=r.status;
+        el.className='pill '+(/Registered/i.test(r.status)?'p-ok':'p-err'); }
+    });
+  }).catch(function(){});
+  setTimeout(poll,5000);
+})();
+</script>
+<%- include('foot') %>

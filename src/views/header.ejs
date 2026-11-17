@@ -1,0 +1,14 @@
+<header class="header">
+  <div class="brand">
+    <div class="brand-mark"></div>
+    <span class="brand-name">ShadowPBX</span>
+    <span class="brand-tag">Campaign</span>
+  </div>
+  <div class="header-spacer"></div>
+  <div class="header-status"><span class="header-dot"></span> Online</div>
+  <span class="pill p-miss" style="margin-left:12px;font-size:9px">campaign</span>
+  <span class="header-user"><%= typeof user !== 'undefined' ? user : 'campaign' %></span>
+  <form method="POST" action="/logout" style="display:inline">
+    <button type="submit" class="header-logout" style="background:none;border:none;cursor:pointer;font:inherit;color:inherit;padding:0">Sign out</button>
+  </form>
+</header>

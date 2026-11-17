@@ -1,0 +1,67 @@
+<%- include('head', { title: 'Audio', active: 'audio' }) %>
+<%- include('flash') %>
+<% if (!hasSox) { %>
+  <div class="alert alert-err"><strong>sox is not installed</strong> — uploads cannot be converted.
+  Run <span class="mono">apt-get install -y sox</span> on this server.</div>
+<% } %>
+<div class="section">
+  <div class="sec-head"><div class="sec-title">Audio library</div>
+    <span class="muted" style="font-size:11px">Uploads are converted to 8kHz mono — the only format Asterisk plays reliably</span></div>
+  <div class="card">
+    <% if (!files.length) { %>
+      <div class="empty">No audio files yet. Upload a greeting below.</div>
+    <% } else { %>
+    <table class="tbl"><thead><tr>
+      <th>Name</th><th>Sound ID</th><th>Length</th><th>Size</th><th>Updated</th><th></th>
+    </tr></thead><tbody>
+    <% files.forEach(function(f){ var inUse = settings.ivr.greeting === f.soundId; %>
+      <tr>
+        <td><strong><%= f.name %></strong> <% if (inUse) { %><span class="pill p-ok">in use</span><% } %></td>
+        <td class="mono"><%= f.soundId %></td>
+        <td><%= f.seconds %>s</td>
+        <td class="muted"><%= Math.round(f.bytes/1024) %> KB</td>
+        <td class="muted" style="font-size:11px"><%= f.updatedAt.slice(0,16).replace('T',' ') %></td>
+        <td style="text-align:right;white-space:nowrap">
+          <audio controls preload="none" src="/audio/<%= encodeURIComponent(f.file) %>/play"
+                 style="height:28px;vertical-align:middle;max-width:180px"></audio>
+          <button class="btn btn-sm" onclick="renameFile('<%= f.file %>','<%= f.name %>')">Rename</button>
+          <form class="inline-form" method="post" action="/audio/<%= encodeURIComponent(f.file) %>/delete"
+                onsubmit="return confirm('Delete <%= f.name %>?')">
+            <button class="btn btn-sm btn-danger" type="submit">Delete</button></form>
+        </td>
+      </tr>
+    <% }) %>
+    </tbody></table>
+    <% } %>
+  </div>
+</div>
+
+<div class="section">
+  <div class="sec-head"><div class="sec-title">Upload</div></div>
+  <div class="card">
+    <form method="post" action="/audio/upload" enctype="multipart/form-data">
+      <div class="grid-3">
+        <div class="form-group"><label class="form-label">Audio file</label>
+          <input class="form-input" type="file" name="file" accept="audio/*" required></div>
+        <div class="form-group"><label class="form-label">Name <span class="muted">(optional)</span></label>
+          <input class="form-input" name="name" placeholder="greeting"></div>
+      </div>
+      <button class="btn btn-primary" type="submit" <%= hasSox ? '' : 'disabled' %>>Upload &amp; convert</button>
+      <span class="muted" style="font-size:11px;margin-left:8px">Any format — converted automatically. Max 25 MB.</span>
+    </form>
+  </div>
+</div>
+
+<form method="post" action="/audio/rename" id="rename-form" style="display:none">
+  <input type="hidden" name="file" id="r-file"><input type="hidden" name="name" id="r-name">
+</form>
+<script>
+function renameFile(file, current){
+  var n = prompt('New name for "'+current+'"', current);
+  if(!n || n===current) return;
+  document.getElementById('r-file').value=file;
+  document.getElementById('r-name').value=n;
+  document.getElementById('rename-form').submit();
+}
+</script>
+<%- include('foot') %>

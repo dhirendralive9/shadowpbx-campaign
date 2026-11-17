@@ -1,0 +1,5 @@
+<% if (typeof flash !== 'undefined' && flash) { %><div class="alert alert-ok"><%= flash %></div><% } %>
+<% if (typeof flashErr !== 'undefined' && flashErr) { %><div class="alert alert-err"><%= flashErr %></div><% } %>
+<% if (typeof missing !== 'undefined' && missing.length) { %>
+  <div class="alert alert-warn">Not ready to place calls — missing: <strong><%= missing.join(', ') %></strong></div>
+<% } %>

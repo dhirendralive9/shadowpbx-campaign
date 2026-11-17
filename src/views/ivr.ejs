@@ -1,0 +1,39 @@
+<%- include('head', { title: 'IVR', active: 'ivr' }) %>
+<%- include('flash') %>
+<div class="section">
+  <div class="sec-head"><div class="sec-title">IVR behaviour</div>
+    <span class="muted" style="font-size:11px">What the lead hears, and how long we wait for a key</span></div>
+  <div class="card">
+    <form method="post" action="/ivr/save">
+      <div class="grid-3">
+        <div class="form-group"><label class="form-label">Greeting</label>
+          <% if (files.length) { %>
+            <select class="form-select" name="greeting">
+              <% files.forEach(function(f){ %>
+                <option value="<%= f.soundId %>" <%= settings.ivr.greeting===f.soundId?'selected':'' %>>
+                  <%= f.name %> (<%= f.seconds %>s)</option>
+              <% }) %>
+            </select>
+          <% } else { %>
+            <input class="form-input" name="greeting" value="<%= settings.ivr.greeting %>">
+          <% } %>
+        </div>
+        <div class="form-group"><label class="form-label">Confirm key</label>
+          <input class="form-input" name="confirmKey" value="<%= settings.ivr.confirmKey %>" maxlength="1"></div>
+        <div class="form-group"><label class="form-label">Opt-out key</label>
+          <input class="form-input" name="optOutKey" value="<%= settings.ivr.optOutKey %>" maxlength="1"></div>
+        <div class="form-group"><label class="form-label">Greetings before reject</label>
+          <input class="form-input" name="maxGreetings" type="number" min="1" max="5" value="<%= settings.ivr.maxGreetings %>">
+          <span class="muted" style="font-size:10px">A voicemail never presses a key, so after the last greeting the call is dropped.</span></div>
+        <div class="form-group"><label class="form-label">Wait per greeting (s)</label>
+          <input class="form-input" name="waitSeconds" type="number" min="3" max="30" value="<%= settings.ivr.waitSeconds %>"></div>
+      </div>
+      <% if (!files.length) { %>
+        <div class="alert alert-warn">No audio uploaded yet — add a greeting on the
+          <a href="/audio">Audio</a> tab first.</div>
+      <% } %>
+      <button class="btn btn-primary" type="submit">Save</button>
+    </form>
+  </div>
+</div>
+<%- include('foot') %>

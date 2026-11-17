@@ -1,110 +1,206 @@
 'use strict';
 /**
- * Settings store.
+ * Settings store — multi-record.
  *
- * Everything that used to live in .env and be edited over SSH now lives here
- * and is edited in the UI. .env keeps only bootstrap values — the things
- * needed before the app can serve a page (port, session secret, ARI
- * credentials, which double as the login).
+ * Trunks and servers are lists, each with a name, and one of each is marked
+ * active. A single hardcoded trunk was the wrong shape: you need several
+ * providers saved and the ability to switch without retyping credentials.
  *
- * Deliberately a JSON file rather than MongoDB: this is ~20 fields, and Mongo
- * is not in Debian's repositories either. When leads and campaigns arrive they
- * bring Mongo with them and these settings migrate in minutes.
+ * JSON file rather than MongoDB for now; migrates when leads/campaigns land.
  */
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const FILE = process.env.SETTINGS_FILE || path.join(__dirname, '../../config/settings.json');
+const newId = () => crypto.randomBytes(6).toString('hex');
 
 const DEFAULTS = {
-  trunk: {
-    name: 'german-trunk',
-    host: '',
-    user: '',
-    pass: '',
-    port: 5060,
-    transport: 'udp',
-    register: true,
-    callerId: '',
-  },
-  pbx: {
-    host: '',
-    port: 5060,
-    agentExten: '2000',
-    apiUrl: '',
-    apiKey: '',
-  },
+  trunks: [],
+  activeTrunkId: null,
+  servers: [],
+  activeServerId: null,
   ivr: {
-    greeting: 'campaign/greeting',   // relative to /var/lib/asterisk/sounds
+    greeting: 'campaign/greeting',
     confirmKey: '1',
     optOutKey: '2',
     maxGreetings: 2,
     waitSeconds: 8,
   },
-  meta: { updatedAt: null },
+  meta: { updatedAt: null, version: 2 },
 };
 
-function deepMerge(base, override) {
-  const out = Array.isArray(base) ? [...base] : { ...base };
-  for (const [k, v] of Object.entries(override || {})) {
-    out[k] = v && typeof v === 'object' && !Array.isArray(v) && typeof base[k] === 'object'
-      ? deepMerge(base[k], v)
-      : v;
+function readRaw() {
+  try {
+    return JSON.parse(fs.readFileSync(FILE, 'utf8'));
+  } catch (e) {
+    if (e.code !== 'ENOENT') console.error(`settings: ${FILE}: ${e.message}`);
+    return null;
   }
+}
+
+/** v1 stored a single trunk/pbx object. Convert it to the list form. */
+function migrate(raw) {
+  if (!raw) return null;
+  if (raw.meta && raw.meta.version >= 2) return raw;
+
+  const out = JSON.parse(JSON.stringify(DEFAULTS));
+  if (raw.ivr) Object.assign(out.ivr, raw.ivr);
+
+  if (raw.trunk && raw.trunk.host) {
+    const t = { id: newId(), name: raw.trunk.name || 'German trunk', ...raw.trunk };
+    delete t.name === undefined;
+    out.trunks.push(t);
+    out.activeTrunkId = t.id;
+  }
+  if (raw.pbx && raw.pbx.host) {
+    const s = {
+      id: newId(), name: 'Main ShadowPBX',
+      host: raw.pbx.host, port: raw.pbx.port || 5060,
+      agentExten: raw.pbx.agentExten || '2000',
+      apiUrl: raw.pbx.apiUrl || '', apiKey: raw.pbx.apiKey || '',
+    };
+    out.servers.push(s);
+    out.activeServerId = s.id;
+  }
+  out.meta.version = 2;
   return out;
 }
 
 function load() {
-  try {
-    const raw = fs.readFileSync(FILE, 'utf8');
-    return deepMerge(DEFAULTS, JSON.parse(raw));
-  } catch (e) {
-    if (e.code !== 'ENOENT') {
-      console.error(`settings: could not read ${FILE}: ${e.message} — using defaults`);
-    }
-    // First run: seed from .env so an existing install keeps working.
-    return deepMerge(DEFAULTS, seedFromEnv());
-  }
+  const raw = migrate(readRaw());
+  if (!raw) return JSON.parse(JSON.stringify(DEFAULTS));
+  return {
+    ...JSON.parse(JSON.stringify(DEFAULTS)),
+    ...raw,
+    ivr: { ...DEFAULTS.ivr, ...(raw.ivr || {}) },
+    trunks: raw.trunks || [],
+    servers: raw.servers || [],
+    meta: { ...DEFAULTS.meta, ...(raw.meta || {}) },
+  };
 }
 
-function seedFromEnv() {
-  const e = process.env;
-  const seed = { trunk: {}, pbx: {}, ivr: {} };
-  if (e.TRUNK_HOST && !/yourprovider/.test(e.TRUNK_HOST)) seed.trunk.host = e.TRUNK_HOST;
-  if (e.TRUNK_USER && !/your_sip/.test(e.TRUNK_USER)) seed.trunk.user = e.TRUNK_USER;
-  if (e.TRUNK_PASS && !/your_sip/.test(e.TRUNK_PASS)) seed.trunk.pass = e.TRUNK_PASS;
-  if (e.CALLER_ID) seed.trunk.callerId = e.CALLER_ID;
-  if (e.PBX_HOST) seed.pbx.host = e.PBX_HOST;
-  if (e.PBX_PORT) seed.pbx.port = parseInt(e.PBX_PORT, 10) || 5060;
-  if (e.AGENT_EXTEN) seed.pbx.agentExten = e.AGENT_EXTEN;
-  if (e.PBX_API_URL) seed.pbx.apiUrl = e.PBX_API_URL;
-  if (e.CONFIRM_KEY) seed.ivr.confirmKey = e.CONFIRM_KEY;
-  if (e.OPTOUT_KEY) seed.ivr.optOutKey = e.OPTOUT_KEY;
-  if (e.MAX_GREETINGS) seed.ivr.maxGreetings = parseInt(e.MAX_GREETINGS, 10) || 2;
-  if (e.WAIT_SECONDS) seed.ivr.waitSeconds = parseInt(e.WAIT_SECONDS, 10) || 8;
-  return seed;
-}
-
-function save(patch) {
-  const merged = deepMerge(load(), patch);
-  merged.meta.updatedAt = new Date().toISOString();
+function persist(s) {
+  s.meta.updatedAt = new Date().toISOString();
+  s.meta.version = 2;
   fs.mkdirSync(path.dirname(FILE), { recursive: true });
-  // Write via a temp file so a crash mid-write can't leave truncated settings.
   const tmp = `${FILE}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(merged, null, 2), { mode: 0o600 });
+  fs.writeFileSync(tmp, JSON.stringify(s, null, 2), { mode: 0o600 });
   fs.renameSync(tmp, FILE);
-  return merged;
+  return s;
 }
 
-/** Fields that must be set before a call can be placed. */
+// ---------------------------------------------------------------- trunks
+function saveTrunk(data) {
+  const s = load();
+  const clean = {
+    name: (data.name || '').trim() || 'Unnamed trunk',
+    host: (data.host || '').trim(),
+    user: (data.user || '').trim(),
+    port: parseInt(data.port, 10) || 5060,
+    transport: data.transport || 'udp',
+    register: data.register !== false,
+    callerId: (data.callerId || '').trim(),
+  };
+  const existing = data.id ? s.trunks.find((t) => t.id === data.id) : null;
+  if (existing) {
+    // Blank password means "unchanged" — don't wipe a stored secret.
+    if ((data.pass || '').trim()) clean.pass = data.pass.trim();
+    Object.assign(existing, clean);
+  } else {
+    clean.id = newId();
+    clean.pass = (data.pass || '').trim();
+    s.trunks.push(clean);
+    if (!s.activeTrunkId) s.activeTrunkId = clean.id;
+  }
+  return persist(s);
+}
+
+function deleteTrunk(id) {
+  const s = load();
+  s.trunks = s.trunks.filter((t) => t.id !== id);
+  if (s.activeTrunkId === id) s.activeTrunkId = s.trunks[0] ? s.trunks[0].id : null;
+  return persist(s);
+}
+
+function setActiveTrunk(id) {
+  const s = load();
+  if (s.trunks.some((t) => t.id === id)) s.activeTrunkId = id;
+  return persist(s);
+}
+
+// ---------------------------------------------------------------- servers
+function saveServer(data) {
+  const s = load();
+  const clean = {
+    name: (data.name || '').trim() || 'Unnamed server',
+    host: (data.host || '').trim(),
+    port: parseInt(data.port, 10) || 5060,
+    agentExten: (data.agentExten || '').trim(),
+    apiUrl: (data.apiUrl || '').trim(),
+  };
+  const existing = data.id ? s.servers.find((x) => x.id === data.id) : null;
+  if (existing) {
+    if ((data.apiKey || '').trim()) clean.apiKey = data.apiKey.trim();
+    Object.assign(existing, clean);
+  } else {
+    clean.id = newId();
+    clean.apiKey = (data.apiKey || '').trim();
+    s.servers.push(clean);
+    if (!s.activeServerId) s.activeServerId = clean.id;
+  }
+  return persist(s);
+}
+
+function deleteServer(id) {
+  const s = load();
+  s.servers = s.servers.filter((x) => x.id !== id);
+  if (s.activeServerId === id) s.activeServerId = s.servers[0] ? s.servers[0].id : null;
+  return persist(s);
+}
+
+function setActiveServer(id) {
+  const s = load();
+  if (s.servers.some((x) => x.id === id)) s.activeServerId = id;
+  return persist(s);
+}
+
+function saveIvr(data) {
+  const s = load();
+  s.ivr = {
+    greeting: (data.greeting || '').trim() || s.ivr.greeting,
+    confirmKey: (data.confirmKey || '1').trim(),
+    optOutKey: (data.optOutKey || '2').trim(),
+    maxGreetings: Math.max(1, Math.min(5, parseInt(data.maxGreetings, 10) || 2)),
+    waitSeconds: Math.max(3, Math.min(30, parseInt(data.waitSeconds, 10) || 8)),
+  };
+  return persist(s);
+}
+
+const activeTrunk = (s) => (s.trunks || []).find((t) => t.id === s.activeTrunkId) || null;
+const activeServer = (s) => (s.servers || []).find((x) => x.id === s.activeServerId) || null;
+
+/** What's missing before a call can be placed. */
 function validate(s) {
   const missing = [];
-  if (!s.trunk.host) missing.push('Trunk host');
-  if (!s.trunk.user) missing.push('Trunk username');
-  if (!s.trunk.pass) missing.push('Trunk password');
-  if (!s.pbx.host) missing.push('ShadowPBX host');
-  if (!s.pbx.agentExten) missing.push('Agent extension');
+  const t = activeTrunk(s), sv = activeServer(s);
+  if (!t) missing.push('an active trunk');
+  else {
+    if (!t.host) missing.push('trunk host');
+    if (!t.user) missing.push('trunk username');
+    if (!t.pass) missing.push('trunk password');
+  }
+  if (!sv) missing.push('an active server');
+  else {
+    if (!sv.host) missing.push('server host');
+    if (!sv.agentExten) missing.push('agent extension');
+  }
   return missing;
 }
 
-module.exports = { load, save, validate, DEFAULTS, FILE };
+module.exports = {
+  load, persist, validate, activeTrunk, activeServer,
+  saveTrunk, deleteTrunk, setActiveTrunk,
+  saveServer, deleteServer, setActiveServer,
+  saveIvr, DEFAULTS, FILE, newId,
+};

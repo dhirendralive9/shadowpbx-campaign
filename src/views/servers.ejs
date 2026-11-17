@@ -1,0 +1,94 @@
+<%- include('head', { title: 'Servers', active: 'servers' }) %>
+<%- include('flash') %>
+<div class="section">
+  <div class="sec-head"><div class="sec-title">PBX Servers</div>
+    <span class="muted" style="font-size:11px">Where confirmed leads are transferred</span></div>
+  <div class="card">
+    <% if (!settings.servers.length) { %>
+      <div class="empty">No servers yet. Add your main ShadowPBX below.</div>
+    <% } else { %>
+    <table class="tbl"><thead><tr>
+      <th>Name</th><th>Host</th><th>Agent ext.</th><th>API</th><th>Reachable</th><th></th>
+    </tr></thead><tbody>
+    <% settings.servers.forEach(function(sv){ var on = sv.id === settings.activeServerId; %>
+      <tr>
+        <td><strong><%= sv.name %></strong> <% if (on) { %><span class="pill p-ok">active</span><% } %></td>
+        <td class="mono"><%= sv.host %>:<%= sv.port %></td>
+        <td class="mono"><%= sv.agentExten %></td>
+        <td><% if (sv.apiUrl) { %><span class="pill p-info">set</span><% } else { %><span class="muted">—</span><% } %></td>
+        <td><span class="pill p-gray" data-ep="server-<%= sv.id %>">—</span></td>
+        <td style="text-align:right;white-space:nowrap">
+          <button class="btn btn-sm" onclick="editServer('<%= sv.id %>')">Edit</button>
+          <% if (!on) { %>
+            <form class="inline-form" method="post" action="/servers/<%= sv.id %>/activate">
+              <button class="btn btn-sm" type="submit">Use this</button></form>
+          <% } %>
+          <form class="inline-form" method="post" action="/servers/<%= sv.id %>/delete"
+                onsubmit="return confirm('Delete server <%= sv.name %>?')">
+            <button class="btn btn-sm btn-danger" type="submit">Delete</button></form>
+        </td>
+      </tr>
+    <% }) %>
+    </tbody></table>
+    <% } %>
+  </div>
+</div>
+
+<div class="section">
+  <div class="sec-head"><div class="sec-title" id="form-title">Add a server</div></div>
+  <div class="card">
+    <form method="post" action="/servers/save" id="server-form">
+      <input type="hidden" name="id" id="s-id">
+      <div class="grid-3">
+        <div class="form-group"><label class="form-label">Name</label>
+          <input class="form-input" name="name" id="s-name" placeholder="Main ShadowPBX" required></div>
+        <div class="form-group"><label class="form-label">Host / IP</label>
+          <input class="form-input" name="host" id="s-host" placeholder="89.117.51.116" required></div>
+        <div class="form-group"><label class="form-label">SIP port</label>
+          <input class="form-input" name="port" id="s-port" type="number" value="5060"></div>
+        <div class="form-group"><label class="form-label">Agent extension</label>
+          <input class="form-input" name="agentExten" id="s-ext" placeholder="2000" required></div>
+        <div class="form-group"><label class="form-label">Agent API URL <span class="muted">(optional)</span></label>
+          <input class="form-input" name="apiUrl" id="s-api" placeholder="https://pbx/api/campaign"></div>
+        <div class="form-group"><label class="form-label">API key</label>
+          <input class="form-input" name="apiKey" id="s-key" type="password" placeholder="not set"></div>
+      </div>
+      <button class="btn btn-primary" type="submit">Save server</button>
+      <button class="btn" type="button" onclick="resetServer()">Cancel</button>
+    </form>
+  </div>
+</div>
+
+<script>
+var SERVERS = <%- JSON.stringify(settings.servers.map(function(s){
+  return {id:s.id,name:s.name,host:s.host,port:s.port,agentExten:s.agentExten,apiUrl:s.apiUrl}; })) %>;
+var s_id=document.getElementById('s-id'),s_name=document.getElementById('s-name'),
+ s_host=document.getElementById('s-host'),s_port=document.getElementById('s-port'),
+ s_ext=document.getElementById('s-ext'),s_api=document.getElementById('s-api'),
+ s_key=document.getElementById('s-key');
+function editServer(id){
+  var s=SERVERS.find(function(x){return x.id===id;}); if(!s) return;
+  s_id.value=s.id; s_name.value=s.name||''; s_host.value=s.host||''; s_port.value=s.port||5060;
+  s_ext.value=s.agentExten||''; s_api.value=s.apiUrl||'';
+  s_key.placeholder='•••••••• (unchanged)'; s_key.value='';
+  document.getElementById('form-title').textContent='Edit server — '+(s.name||'');
+  document.getElementById('server-form').scrollIntoView({behavior:'smooth'});
+}
+function resetServer(){
+  document.getElementById('server-form').reset(); s_id.value='';
+  s_key.placeholder='not set';
+  document.getElementById('form-title').textContent='Add a server';
+}
+(function poll(){
+  fetch('/api/status').then(r=>r.json()).then(function(d){
+    if(!d.ok) return;
+    (d.status.endpoints||[]).forEach(function(e){
+      var el=document.querySelector('[data-ep="'+e.name+'"]');
+      if(el){ el.textContent=e.state;
+        el.className='pill '+(/Unavailable/i.test(e.state)?'p-err':'p-ok'); }
+    });
+  }).catch(function(){});
+  setTimeout(poll,5000);
+})();
+</script>
+<%- include('foot') %>

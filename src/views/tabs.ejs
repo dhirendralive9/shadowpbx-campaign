@@ -1,0 +1,21 @@
+<%
+var ic = {
+  grid:   '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>',
+  route:  '<svg viewBox="0 0 24 24"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 000-7h-11a3.5 3.5 0 010-7H15"/><circle cx="18" cy="5" r="3"/></svg>',
+  server: '<svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>',
+  voicemail:'<svg viewBox="0 0 24 24"><circle cx="5.5" cy="11.5" r="4.5"/><circle cx="18.5" cy="11.5" r="4.5"/><line x1="5.5" y1="16" x2="18.5" y2="16"/></svg>',
+  ivr:    '<svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></svg>'
+};
+var tabs = [
+  { id:'dashboard', label:'Overview', icon:'grid',      href:'/' },
+  { id:'trunks',    label:'Trunks',   icon:'route',     href:'/trunks' },
+  { id:'servers',   label:'Servers',  icon:'server',    href:'/servers' },
+  { id:'audio',     label:'Audio',    icon:'voicemail', href:'/audio' },
+  { id:'ivr',       label:'IVR',      icon:'ivr',       href:'/ivr' }
+];
+%>
+<nav class="tabs">
+  <% tabs.forEach(function(t){ %>
+    <a href="<%= t.href %>" class="tab <%= active === t.id ? 'active' : '' %>"><%- ic[t.icon] %><%= t.label %></a>
+  <% }) %>
+</nav>

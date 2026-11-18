@@ -565,7 +565,7 @@ function causeText(code) {
     17: 'Busy.',
     18: 'No user responding.',
     19: 'No answer (the phone rang out).',
-    21: 'Call rejected — the provider refused the INVITE. With IP auth this usually means the From number is not one the account is allowed to present.',
+    21: 'Call rejected — the provider refused the INVITE. Three usual causes: the trunk is not registered (check the status pill, and `pjsip show registrations`), the number format is one this carrier will not take, or the From identity is not one the account may present. All three are set per trunk on the Trunks tab.',
     27: 'Destination out of order.',
     28: 'Invalid number format — check the country code.',
     34: 'No circuit available.',

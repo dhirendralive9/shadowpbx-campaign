@@ -19,7 +19,7 @@
  * Build the dial string ARI needs for a PJSIP trunk.
  *
  * Asterisk reads `PJSIP/<endpoint>/<x>` as "endpoint, then AOR or sip: URI", so
- * `PJSIP/trunk-abc/919778988634` looks for an AOR *named* 919778988634 and the
+ * `PJSIP/trunk-abc/15551234567` looks for an AOR *named* 15551234567 and the
  * call dies before any INVITE leaves. The trunk form is `PJSIP/<number>@<endpoint>`
  * -- the one `channel originate` was proven with against this carrier, E.164 with
  * a leading +.

@@ -50,7 +50,7 @@
         <div class="form-group"><label class="form-label">Name</label>
           <input class="form-input" name="name" id="t-name" placeholder="German VoIP" required></div>
         <div class="form-group"><label class="form-label">SIP host</label>
-          <input class="form-input" name="host" id="t-host" placeholder="sip.provider.de" required></div>
+          <input class="form-input" name="host" id="t-host" placeholder="sip.provider.example" required></div>
         <div class="form-group"><label class="form-label">Username</label>
           <input class="form-input" name="user" id="t-user" required></div>
         <div class="form-group"><label class="form-label">Password</label>
@@ -62,9 +62,9 @@
             <option value="udp">UDP</option><option value="tcp">TCP</option><option value="tls">TLS</option>
           </select></div>
         <div class="form-group"><label class="form-label">Caller ID</label>
-          <input class="form-input" name="callerId" id="t-cid" placeholder="4915XXXXXXXX"></div>
+          <input class="form-input" name="callerId" id="t-cid" placeholder="4930123456789"></div>
         <div class="form-group"><label class="form-label">Provider IPs <span class="muted">(optional)</span></label>
-          <input class="form-input" name="matchIps" id="t-match" placeholder="37.187.146.93">
+          <input class="form-input" name="matchIps" id="t-match" placeholder="198.51.100.20">
           <span class="muted" style="font-size:11px">Extra source IPs to accept inbound calls from, if they
             differ from the SIP host.</span></div>
       </div>
@@ -168,7 +168,7 @@ var t_id=document.getElementById('t-id'),t_name=document.getElementById('t-name'
     <input type="hidden" id="test-trunk">
     <div class="grid-3">
       <div class="form-group"><label class="form-label">Number to call</label>
-        <input class="form-input" id="test-number" placeholder="491515302325">
+        <input class="form-input" id="test-number" placeholder="4930123456789">
         <span class="muted" style="font-size:11px">Full number with country code, digits only.</span></div>
       <div class="form-group"><label class="form-label">Audio to play</label>
         <select class="form-select" id="test-sound">

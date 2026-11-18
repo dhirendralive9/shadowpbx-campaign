@@ -31,7 +31,7 @@ const jobs = new Map();
  * Build the dial string ARI needs for a PJSIP trunk.
  *
  * Asterisk reads `PJSIP/<endpoint>/<x>` as "endpoint, then AOR or sip: URI", so
- * `PJSIP/trunk-abc/919778988634` looks for an AOR *named* 919778988634 and the
+ * `PJSIP/trunk-abc/15551234567` looks for an AOR *named* 15551234567 and the
  * call dies before any INVITE leaves. The trunk form is `PJSIP/<number>@<endpoint>`
  * -- the one `channel originate` was proven with against this carrier, E.164 with
  * a leading +.
@@ -355,8 +355,29 @@ async function doTransfer(job, channel, client, key) {
   }
 
   let agentUp = false;
+
+  /**
+   * One leg hanging up must take the other with it.
+   *
+   * ARI does not do this for you: the bridge survives, and the agent sits
+   * listening to nothing with the call still shown as connected on their
+   * phone. On a campaign that is an agent who never becomes available again.
+   */
+  const teardown = async (who) => {
+    if (job._torn) return;
+    job._torn = true;
+    log(job, `${who} hung up — clearing the other leg`);
+    for (const ch of [job._agentChan, channel]) {
+      if (ch) { try { await ch.hangup(); } catch (e) {} }
+    }
+    try { await bridge.destroy(); } catch (e) {}
+  };
+  channel.once('ChannelDestroyed', () => teardown('Lead'));
+
   const agentReady = new Promise((resolve) => {
     job._onAgent = async (agentChan) => {
+      job._agentChan = agentChan;
+      agentChan.once('ChannelDestroyed', () => teardown('Agent'));
       try {
         await agentChan.answer();
         await bridge.addChannel({ channel: [channel.id, agentChan.id] });
@@ -376,6 +397,10 @@ async function doTransfer(job, channel, client, key) {
       endpoint: dialString(job.serverEndpoint, job.routeNumber, false),
       app: ARI_APP,
       appArgs: `agent,${job.id}`,
+      // The agent must see who is calling. Without this the leg is placed with
+      // no caller id and the phone shows "anonymous", which is useless on a
+      // screen pop and makes a callback impossible.
+      callerId: job.number,
       timeout: job.agentRingSeconds,
     });
   } catch (e) {

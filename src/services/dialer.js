@@ -209,7 +209,14 @@ function tick(id) {
   // what is actually happening rather than what we last assumed.
   for (const [phone, entry] of rt.calls) {
     const job = entry.jobId ? testcall.get(entry.jobId) : null;
-    if (!job) continue;
+    // No job behind the call at all: it was reaped, or the service restarted
+    // mid-call. Either way nothing will ever report an outcome for it, so the
+    // slot has to be released or concurrency bleeds away one call at a time
+    // until the campaign dials nothing and reports no error.
+    if (!job) {
+      if (entry.jobId && Date.now() - (entry.startedAt || 0) > 5000) rt.calls.delete(phone);
+      continue;
+    }
     entry.state = job.finished ? 'done' : (job.state || entry.state);
     // A job that finished without onFinish firing (process restart, say)
     // would otherwise hold a slot forever.

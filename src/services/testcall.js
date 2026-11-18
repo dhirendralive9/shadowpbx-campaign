@@ -55,11 +55,33 @@ const withTimeout = (p, ms, msg) => Promise.race([
   p, new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), ms)),
 ]);
 
-// Keep the last few jobs only -- this is a diagnostic, not a call log.
+// How many FINISHED jobs to keep for the UI to show. Live jobs are never
+// counted against this.
+const KEEP_FINISHED = 50;
+// An unfinished job this old is not a call any more, it is a leak. Far longer
+// than any real call, so a live one can never be caught by it.
+const ABANDON_MS = 60 * 60 * 1000;
+
+/**
+ * Drop old jobs.
+ *
+ * A LIVE job must never be dropped. `onStasisStart` looks the job up by id the
+ * moment the channel answers, and a missing entry makes it hang up on the lead
+ * instantly -- and the dialler, finding no job behind the call, holds that
+ * concurrency slot forever. This originally kept the newest 20 jobs full stop,
+ * which was right when this was a one-call-at-a-time diagnostic and silently
+ * wrong the moment a campaign ran more than 20 calls at once.
+ */
 function reap() {
-  if (jobs.size <= 20) return;
-  const old = [...jobs.values()].sort((a, b) => a.startedAt - b.startedAt).slice(0, jobs.size - 20);
-  for (const j of old) jobs.delete(j.id);
+  const now = Date.now();
+  const done = [];
+  for (const j of jobs.values()) {
+    if (j.finished) done.push(j);
+    else if (now - j.startedAt > ABANDON_MS) jobs.delete(j.id);
+  }
+  if (done.length <= KEEP_FINISHED) return;
+  done.sort((a, b) => a.startedAt - b.startedAt);
+  for (const j of done.slice(0, done.length - KEEP_FINISHED)) jobs.delete(j.id);
 }
 
 // ------------------------------------------------------------------ ARI

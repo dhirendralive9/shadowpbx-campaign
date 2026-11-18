@@ -108,6 +108,14 @@ function saveTrunk(data) {
     // array, so the last value is the one that counts.
     register: truthy(Array.isArray(data.register)
       ? data.register[data.register.length - 1] : data.register),
+    // Who we claim to be in the From header.
+    //   auto     — account name when we authenticate, caller ID when we do not
+    //   user     — always the account name
+    //   callerid — always the caller ID
+    // This is the single most common cause of a 403 on the INVITE from a trunk
+    // that is otherwise configured correctly, and no two providers agree on
+    // which they want, so it has to be settable rather than inferred.
+    fromUser: ['auto', 'user', 'callerid'].includes(data.fromUser) ? data.fromUser : 'auto',
     // Extra IPs the provider sends from, when they differ from the SIP host.
     matchIps: (data.matchIps || '').trim(),
     callerId: (data.callerId || '').trim(),

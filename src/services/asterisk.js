@@ -130,6 +130,18 @@ protocol = udp
 bind = 0.0.0.0:5060
 `;
 
+  /**
+   * A registering trunk is matched on its account name, so From must carry it.
+   * A trunk that authenticates per-INVITE usually wants the same. An
+   * IP-authenticated one is matched on source IP and normally wants a real
+   * number, because the account name there earns a 403.
+   */
+  const fromUserFor = (t, hasAuth) => {
+    if (t.fromUser === 'user') return t.user;
+    if (t.fromUser === 'callerid') return t.callerId || t.user;
+    return (t.register || hasAuth) ? t.user : (t.callerId || t.user);
+  };
+
   for (const t of s.trunks || []) {
     if (!t.host || !t.user) continue;
     const id = `trunk-${t.id}`;
@@ -186,7 +198,7 @@ disallow = all
 allow = ulaw,alaw
 ${hasAuth ? `outbound_auth = ${id}-auth` : '; IP-authenticated - no outbound_auth'}
 aors = ${id}
-from_user = ${esc(t.register ? t.user : (t.callerId || t.user))}
+from_user = ${esc(fromUserFor(t, hasAuth))}
 from_domain = ${esc(t.host)}
 dtmf_mode = auto
 direct_media = no

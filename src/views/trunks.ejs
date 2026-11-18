@@ -16,7 +16,11 @@
         <td class="mono"><%= t.host %>:<%= t.port %></td>
         <td class="mono"><%= t.user %></td>
         <td><%= (t.transport||'udp').toUpperCase() %></td>
-        <td><%= t.register ? 'Register' : 'IP auth' %></td>
+        <td><%= t.register ? 'Register' : (t.pass ? 'Password' : 'IP auth') %>
+          <div class="muted" style="font-size:10px">From:
+            <%= t.fromUser === 'user' ? t.user
+                : t.fromUser === 'callerid' ? (t.callerId || t.user)
+                : ((t.register || t.pass) ? t.user : (t.callerId || t.user)) %></div></td>
         <td><span class="pill p-gray" data-reg="trunk-<%= t.id %>"
                  data-mode="<%= t.register ? 'register' : 'ip' %>">—</span></td>
         <td style="text-align:right;white-space:nowrap">
@@ -71,6 +75,18 @@
       <!-- The hidden field is load-bearing: an unticked checkbox submits nothing,
            so without it "off" is indistinguishable from "not sent" and
            registration can never actually be turned off. -->
+      <div class="grid-3">
+        <div class="form-group"><label class="form-label">Identity in the From header</label>
+          <select class="form-select" name="fromUser" id="t-from">
+            <option value="auto">Automatic — account name when authenticating, caller ID when not</option>
+            <option value="user">Always the account username</option>
+            <option value="callerid">Always the caller ID</option>
+          </select>
+          <span class="muted" style="font-size:11px">The usual cause of <span class="mono">403</span>
+            on the INVITE when everything else is right: providers disagree about which they expect,
+            and the wrong one is rejected after the trunk itself is accepted.</span></div>
+      </div>
+
       <input type="hidden" name="register" value="false">
       <label class="form-label" style="display:flex;align-items:center;gap:8px;margin:10px 0 6px">
         <input type="checkbox" name="register" id="t-register" value="true" checked> Register with the provider</label>
@@ -88,7 +104,7 @@
 <script>
 var TRUNKS = <%- JSON.stringify(settings.trunks.map(function(t){
   return {id:t.id,name:t.name,host:t.host,user:t.user,port:t.port,transport:t.transport,
-          register:t.register,callerId:t.callerId,matchIps:t.matchIps,
+          register:t.register,callerId:t.callerId,matchIps:t.matchIps,fromUser:t.fromUser,
           hasPass:!!t.pass}; })) %>;
 // "Register" with no password produces a config Asterisk quietly refuses: the
 // registration object never loads, `pjsip show registrations` is empty, and the
@@ -116,6 +132,7 @@ function editTrunk(id){
   t_id.value=t.id; t_name.value=t.name||''; t_host.value=t.host||''; t_user.value=t.user||'';
   t_port.value=t.port||5060; t_transport.value=t.transport||'udp'; t_cid.value=t.callerId||'';
   t_register.checked=!!t.register; t_match.value=t.matchIps||'';
+  t_from.value=t.fromUser||'auto';
   t_pass.placeholder='•••••••• (unchanged)'; t_pass.value='';
   document.getElementById('form-title').textContent='Edit trunk — '+(t.name||'');
   document.getElementById('trunk-form').scrollIntoView({behavior:'smooth'});
@@ -129,7 +146,8 @@ var t_id=document.getElementById('t-id'),t_name=document.getElementById('t-name'
  t_host=document.getElementById('t-host'),t_user=document.getElementById('t-user'),
  t_pass=document.getElementById('t-pass'),t_port=document.getElementById('t-port'),
  t_transport=document.getElementById('t-transport'),t_cid=document.getElementById('t-cid'),
- t_register=document.getElementById('t-register'),t_match=document.getElementById('t-match');
+ t_register=document.getElementById('t-register'),t_match=document.getElementById('t-match'),
+ t_from=document.getElementById('t-from');
 // Live status. A registering trunk reports from `pjsip show registrations`;
 // an IP-authenticated one never appears there at all, so its health is the
 // qualify (OPTIONS) result against its AOR instead.

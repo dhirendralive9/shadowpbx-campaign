@@ -411,6 +411,7 @@ app.post('/api/trunks/:id/test-call', auth, (req, res) => {
       number,
       trunkName: trunk.name,
       endpoint: `PJSIP/trunk-${trunk.id}`,
+      numberFormat: trunk.numberFormat,
       sound,
       callerId: (trunk.callerId || '').replace(/[^\d]/g, ''),
       confirmKey: req.body.confirmKey || s.ivr.confirmKey,
@@ -515,6 +516,7 @@ app.post('/api/ivr/:id/test-call', auth, (req, res) => {
     const job = testcall.start({
       number,
       endpoint: `PJSIP/trunk-${trunk.id}`,
+      numberFormat: trunk.numberFormat,
       callerId: (trunk.callerId || '').replace(/[^\d]/g, ''),
       mode: 'flow',
       flow,

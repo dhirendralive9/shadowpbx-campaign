@@ -151,6 +151,7 @@ function placeCall(c, rt, lead, cfg) {
     const job = testcall.start({
       number: lead.phone,
       endpoint: `PJSIP/trunk-${cfg.trunk.id}`,
+      numberFormat: cfg.trunk.numberFormat,
       callerId: (cfg.trunk.callerId || '').replace(/[^\d]/g, ''),
       mode: 'flow',
       flow: cfg.flow,

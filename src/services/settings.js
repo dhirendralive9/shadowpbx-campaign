@@ -116,6 +116,13 @@ function saveTrunk(data) {
     // that is otherwise configured correctly, and no two providers agree on
     // which they want, so it has to be settable rather than inferred.
     fromUser: ['auto', 'user', 'callerid'].includes(data.fromUser) ? data.fromUser : 'auto',
+    // How the dialled number is written in the INVITE.
+    //   e164  — +4917685594635   (most international carriers)
+    //   plain — 4917685594635    (carriers that reject the plus)
+    //   intl  — 004917685594635  (European carriers that want the 00 prefix)
+    // A carrier that dislikes the format rejects the INVITE instantly, which
+    // looks identical to an authentication failure from the outside.
+    numberFormat: ['e164', 'plain', 'intl'].includes(data.numberFormat) ? data.numberFormat : 'e164',
     // Extra IPs the provider sends from, when they differ from the SIP host.
     matchIps: (data.matchIps || '').trim(),
     callerId: (data.callerId || '').trim(),

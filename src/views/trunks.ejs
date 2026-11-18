@@ -20,7 +20,10 @@
           <div class="muted" style="font-size:10px">From:
             <%= t.fromUser === 'user' ? t.user
                 : t.fromUser === 'callerid' ? (t.callerId || t.user)
-                : ((t.register || t.pass) ? t.user : (t.callerId || t.user)) %></div></td>
+                : ((t.register || t.pass) ? t.user : (t.callerId || t.user)) %>
+            &nbsp;·&nbsp; Dials:
+            <%= t.numberFormat === 'plain' ? '15551234567'
+                : t.numberFormat === 'intl' ? '0015551234567' : '+15551234567' %></div></td>
         <td><span class="pill p-gray" data-reg="trunk-<%= t.id %>"
                  data-mode="<%= t.register ? 'register' : 'ip' %>">—</span></td>
         <td style="text-align:right;white-space:nowrap">
@@ -85,6 +88,16 @@
           <span class="muted" style="font-size:11px">The usual cause of <span class="mono">403</span>
             on the INVITE when everything else is right: providers disagree about which they expect,
             and the wrong one is rejected after the trunk itself is accepted.</span></div>
+
+        <div class="form-group"><label class="form-label">How the number is dialled</label>
+          <select class="form-select" name="numberFormat" id="t-numfmt">
+            <option value="e164">+E.164 — +4917685594635</option>
+            <option value="plain">Digits only — 4917685594635</option>
+            <option value="intl">00 prefix — 004917685594635</option>
+          </select>
+          <span class="muted" style="font-size:11px">The other common cause of an instant
+            rejection. A carrier that wants one format answers the others with
+            <span class="mono">403</span> or <span class="mono">404</span> before it ever rings.</span></div>
       </div>
 
       <input type="hidden" name="register" value="false">
@@ -104,7 +117,7 @@
 <script>
 var TRUNKS = <%- JSON.stringify(settings.trunks.map(function(t){
   return {id:t.id,name:t.name,host:t.host,user:t.user,port:t.port,transport:t.transport,
-          register:t.register,callerId:t.callerId,matchIps:t.matchIps,fromUser:t.fromUser,
+          register:t.register,callerId:t.callerId,matchIps:t.matchIps,fromUser:t.fromUser,numberFormat:t.numberFormat,
           hasPass:!!t.pass}; })) %>;
 // "Register" with no password produces a config Asterisk quietly refuses: the
 // registration object never loads, `pjsip show registrations` is empty, and the
@@ -133,6 +146,7 @@ function editTrunk(id){
   t_port.value=t.port||5060; t_transport.value=t.transport||'udp'; t_cid.value=t.callerId||'';
   t_register.checked=!!t.register; t_match.value=t.matchIps||'';
   t_from.value=t.fromUser||'auto';
+  t_numfmt.value=t.numberFormat||'e164';
   t_pass.placeholder='•••••••• (unchanged)'; t_pass.value='';
   document.getElementById('form-title').textContent='Edit trunk — '+(t.name||'');
   document.getElementById('trunk-form').scrollIntoView({behavior:'smooth'});
@@ -147,7 +161,8 @@ var t_id=document.getElementById('t-id'),t_name=document.getElementById('t-name'
  t_pass=document.getElementById('t-pass'),t_port=document.getElementById('t-port'),
  t_transport=document.getElementById('t-transport'),t_cid=document.getElementById('t-cid'),
  t_register=document.getElementById('t-register'),t_match=document.getElementById('t-match'),
- t_from=document.getElementById('t-from');
+ t_from=document.getElementById('t-from'),
+ t_numfmt=document.getElementById('t-numfmt');
 // Live status. A registering trunk reports from `pjsip show registrations`;
 // an IP-authenticated one never appears there at all, so its health is the
 // qualify (OPTIONS) result against its AOR instead.

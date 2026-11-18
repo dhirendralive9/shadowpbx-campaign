@@ -159,12 +159,20 @@ bind = 0.0.0.0:5060
       // reports "No objects found", and the UI sits on "—" forever with no
       // visible error. A registration with no credentials is still wrong, but
       // it fails where you can see it.
+      // `endpoint` on a registration REQUIRES `line = yes`. Without it Asterisk
+      // logs "An endpoint has been specified on outbound registration ...
+      // without enabling line support" and then REFUSES TO CREATE THE OBJECT
+      // AT ALL -- no REGISTER is ever sent, `pjsip show registrations` is
+      // empty, and the provider answers the first INVITE with 403 because it
+      // has never heard from us. That 403 reads exactly like a From-header
+      // problem, which is what made this expensive to find.
       out += `[${id}]
 type = registration
 transport = transport-udp
 ${hasAuth ? `outbound_auth = ${id}-auth` : '; no password saved for this trunk — registering without credentials'}
 server_uri = sip:${esc(t.host)}
 client_uri = sip:${esc(t.user)}@${esc(t.host)}
+line = yes
 endpoint = ${id}
 retry_interval = 60
 forbidden_retry_interval = 600
@@ -210,7 +218,7 @@ trust_id_outbound = yes
 [${id}]
 type = identify
 endpoint = ${id}
-match = ${[esc(t.host)].concat(String(t.matchIps || '').split(/[\s,]+/).filter(Boolean)).join(',')}
+match = ${Array.from(new Set([esc(t.host)].concat(String(t.matchIps || '').split(/[\s,]+/).filter(Boolean)))).join(',')}
 `;
   }
 

@@ -225,6 +225,36 @@ Also check the SIP host is the provider's hostname. A provider portal showing
 your own server's IP under "host" means the IP they accept traffic from, not an
 address to send to.
 
+## Call rejected instantly (hangup cause 21) on a trunk that works elsewhere
+
+Two causes, both of which produce an identical bare 403 within half a second,
+and neither of which says anything useful in the test-call panel. Check them in
+this order.
+
+**1. The registration object was never created.** Look in the Asterisk log for:
+
+```
+ERROR res_pjsip_outbound_registration.c: An endpoint has been specified on
+  outbound registration 'trunk-xxxx' without enabling line support
+ERROR res_sorcery_config.c: Could not create an object of type 'registration'
+```
+
+Asterisk requires `line = yes` wherever a registration names an `endpoint`.
+Without it the whole registration is discarded — no REGISTER is ever sent, so
+the provider has never heard from this machine and refuses the first INVITE.
+`pjsip show registrations` shows nothing for that trunk, which is the tell;
+the generator now always emits `line = yes`, so if you see this the config on
+disk is older than the code. Re-save the trunk in the UI.
+
+**2. The carrier wants a different number format.** `+4917685594635`,
+`4917685594635` and `004917685594635` are not interchangeable — a carrier that
+wants one commonly answers the others with 403 or 404 before the call rings.
+Set it per trunk on the Trunks tab, under "How the number is dialled". The
+table shows each trunk's current format next to its From identity.
+
+Check both before touching the From header: a registration that never loaded
+looks exactly like an identity the provider dislikes.
+
 ## 401 then 403 on the INVITE
 
 The carrier challenged the call and then rejected the credentials. Either the

@@ -36,13 +36,18 @@ const jobs = new Map();
  * -- the one `channel originate` was proven with against this carrier, E.164 with
  * a leading +.
  */
-function dialString(endpoint, number, e164 = true) {
+const NUMBER_PREFIX = { e164: '+', plain: '', intl: '00' };
+
+function dialString(endpoint, number, format = 'e164') {
   const n = String(number).replace(/[^\d]/g, '');
   const m = /^PJSIP\/(.+)$/.exec(endpoint);
   if (!m) return `${endpoint}/${n}`;
-  // A PSTN number needs E.164; an internal route number on the PBX must go out
-  // exactly as dialled, because `+123456789012` matches no inbound route.
-  return `PJSIP/${e164 ? '+' : ''}${n}@${m[1]}`;
+  // A PSTN number needs whatever the carrier accepts -- +E.164, bare digits or
+  // a 00 prefix -- and they disagree. An internal route number on the PBX must
+  // go out exactly as dialled, because `+123456789012` matches no inbound
+  // route, so that path passes 'plain'.
+  const prefix = NUMBER_PREFIX[format] != null ? NUMBER_PREFIX[format] : '+';
+  return `PJSIP/${prefix}${n}@${m[1]}`;
 }
 const newId = () => crypto.randomBytes(5).toString('hex');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -436,7 +441,7 @@ async function doTransfer(job, channel, client, key) {
   const agent = client.Channel();
   try {
     await agent.originate({
-      endpoint: dialString(job.serverEndpoint, job.routeNumber, false),
+      endpoint: dialString(job.serverEndpoint, job.routeNumber, 'plain'),
       app: ARI_APP,
       appArgs: `agent,${job.id}`,
       // The agent must see who is calling. Without this the leg is placed with
@@ -577,8 +582,11 @@ function start(opts) {
     trunkName: opts.trunkName,
     endpoint: opts.endpoint,
     sound: opts.sound,
-    // Trunk tests dial the PSTN; route tests dial a number the PBX owns.
-    e164: opts.e164 !== false,
+    // Trunk tests dial the PSTN in whatever format that carrier accepts;
+    // route tests dial a number the PBX owns and must not be rewritten.
+    // `e164: false` is the older spelling of 'plain' and still honoured.
+    numberFormat: opts.e164 === false ? 'plain'
+      : (['e164', 'plain', 'intl'].includes(opts.numberFormat) ? opts.numberFormat : 'e164'),
     // 'dtmf'  — prove trunk + audio + a keypress coming back (outbound trunks)
     // 'answer'— prove the call reaches a human through the PBX inbound route
     // 'echo'   — prove audio flows BOTH ways on that route
@@ -627,7 +635,7 @@ async function run(job) {
     return finish(job, false, e.message);
   }
 
-  log(job, `Dialling ${dialString(job.endpoint, job.number, job.e164)}`, 'dialing');
+  log(job, `Dialling ${dialString(job.endpoint, job.number, job.numberFormat)}`, 'dialing');
 
   const chan = client.Channel();
   chan.on('ChannelStateChange', (evt, c) => {
@@ -646,7 +654,7 @@ async function run(job) {
 
   try {
     await chan.originate({
-      endpoint: dialString(job.endpoint, job.number, job.e164),
+      endpoint: dialString(job.endpoint, job.number, job.numberFormat),
       app: ARI_APP,
       appArgs: `test,${job.id}`,
       callerId: job.callerId || undefined,

@@ -19,7 +19,8 @@
         <td><span class="pill p-gray" data-ep="server-<%= sv.id %>">—</span></td>
         <td style="text-align:right;white-space:nowrap">
           <button class="btn btn-sm" onclick="editServer('<%= sv.id %>')">Edit</button>
-          <button class="btn btn-sm" onclick="openRouteTest('<%= sv.id %>','<%= sv.name %>')">Test call</button>
+          <button class="btn btn-sm" onclick="openRouteTest('<%= sv.id %>','<%= sv.name %>','answer')">Test call</button>
+          <button class="btn btn-sm" onclick="openRouteTest('<%= sv.id %>','<%= sv.name %>','echo')">Echo test</button>
           <% if (!on) { %>
             <form class="inline-form" method="post" action="/servers/<%= sv.id %>/activate">
               <button class="btn btn-sm" type="submit">Use this</button></form>
@@ -231,11 +232,13 @@ pollAgents();
 
 // ---- route test call ----------------------------------------------------
 var rtPoll=null;
-function openRouteTest(id,name){
+function openRouteTest(id,name,mode){
   if(rtPoll){clearTimeout(rtPoll);rtPoll=null;}
   var sec=document.getElementById('rt-section');
   sec.style.display='';
-  document.getElementById('rt-title').textContent='Test call — '+name;
+  document.getElementById('rt-title').textContent=
+    (mode==='echo'?'Echo test — ':'Test call — ')+name;
+  if(mode) document.getElementById('rt-mode').value=mode;
   document.getElementById('rt-server').value=id;
   document.getElementById('rt-result').innerHTML='';
   document.getElementById('rt-timeline').style.display='none';

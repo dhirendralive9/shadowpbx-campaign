@@ -194,8 +194,11 @@ async function onStasisStart(event, channel) {
     // echo of its own, and ARI cannot loop a channel's media back to itself.
     // The job finishes here while the call carries on -- the person on the
     // agent phone is the instrument now.
-    log(job, 'Answered — switching to echo', 'playing');
+    log(job, `Answered — playing ${job.sound}, then echo`, 'playing');
     try {
+      // The dialplan plays this before the beep: whoever picked up hears what
+      // the call is for, rather than a bare tone.
+      await channel.setChannelVar({ variable: 'CAMPAIGN_PROMPT', value: job.sound });
       await channel.continueInDialplan({ context: 'campaign-echo', extension: 's', priority: 1 });
     } catch (e) {
       handled = true;

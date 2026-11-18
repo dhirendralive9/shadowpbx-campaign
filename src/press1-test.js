@@ -33,21 +33,53 @@ function dialString(endpoint, number) {
 require('dotenv').config();
 const ari = require('ari-client');
 
-const {
-  ARI_URL = 'http://127.0.0.1:8088',
-  ARI_USER = 'campaign',
-  ARI_PASS,
-  ARI_APP = 'shadowpbx-campaign',
-  TRUNK_ENDPOINT = 'PJSIP/german-trunk',
-  PBX_ENDPOINT = 'PJSIP/shadowpbx',
-  CALLER_ID = '491511193838',
-  AGENT_EXTEN = '2000',
-  GREETING = 'sound:/var/lib/asterisk/sounds/campaign/greeting',
-  CONFIRM_KEY = '1',
-  OPTOUT_KEY = '2',
-  MAX_GREETINGS = '2',
-  WAIT_SECONDS = '8',
-} = process.env;
+/**
+ * Endpoint names come from the saved settings, not from .env.
+ *
+ * The app writes PJSIP endpoints named after trunk and server ids, and renames
+ * them whenever one is added or removed. A hand-edited .env goes stale the
+ * first time you touch the Trunks tab, and the symptom is obscure: ARI answers
+ * "Allocation failed", which reads like a resource problem rather than
+ * "PJSIP/german-trunk does not exist". So .env is now only a fallback for a
+ * box with no settings file yet.
+ */
+function fromSettings() {
+  try {
+    const store = require('./services/settings');
+    const asterisk = require('./services/asterisk');
+    const s = store.load();
+    const ep = asterisk.activeEndpoints(s);
+    return {
+      TRUNK_ENDPOINT: ep.trunk || undefined,
+      PBX_ENDPOINT: ep.server || undefined,
+      AGENT_EXTEN: ep.routeNumber || undefined,
+      CALLER_ID: ep.callerId || undefined,
+      GREETING: s.ivr && s.ivr.greeting ? `sound:${s.ivr.greeting}` : undefined,
+      CONFIRM_KEY: s.ivr && s.ivr.confirmKey,
+      OPTOUT_KEY: s.ivr && s.ivr.optOutKey,
+      MAX_GREETINGS: s.ivr && String(s.ivr.maxGreetings),
+      WAIT_SECONDS: s.ivr && String(s.ivr.waitSeconds),
+    };
+  } catch (e) {
+    return {};
+  }
+}
+const saved = fromSettings();
+const pick = (key, fallback) => process.env[key] || saved[key] || fallback;
+
+const ARI_URL = process.env.ARI_URL || 'http://127.0.0.1:8088';
+const ARI_USER = process.env.ARI_USER || 'campaign';
+const ARI_PASS = process.env.ARI_PASS;
+const ARI_APP = process.env.ARI_APP || 'shadowpbx-campaign';
+const TRUNK_ENDPOINT = pick('TRUNK_ENDPOINT', '');
+const PBX_ENDPOINT = pick('PBX_ENDPOINT', '');
+const CALLER_ID = pick('CALLER_ID', '');
+const AGENT_EXTEN = pick('AGENT_EXTEN', '');
+const GREETING = pick('GREETING', 'sound:campaign/test');
+const CONFIRM_KEY = pick('CONFIRM_KEY', '1');
+const OPTOUT_KEY = pick('OPTOUT_KEY', '2');
+const MAX_GREETINGS = pick('MAX_GREETINGS', '2');
+const WAIT_SECONDS = pick('WAIT_SECONDS', '8');
 
 const target = process.argv[2];
 if (!target) {
@@ -56,6 +88,15 @@ if (!target) {
 }
 if (!ARI_PASS) {
   console.error('ARI_PASS is not set — copy .env.example to .env and fill it in.');
+  process.exit(1);
+}
+if (!TRUNK_ENDPOINT) {
+  console.error('No active trunk. Add one on the Trunks tab, or set TRUNK_ENDPOINT in .env.');
+  process.exit(1);
+}
+if (!PBX_ENDPOINT || !AGENT_EXTEN) {
+  console.error('No active server or route number. Add a server on the Servers tab '
+    + '(press 1 has nowhere to transfer to without it).');
   process.exit(1);
 }
 

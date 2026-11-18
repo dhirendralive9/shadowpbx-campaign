@@ -10,36 +10,16 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$HERE"
 
-# ---------------------------------------------------------------
-# Is ARI actually usable? Not "is something named res_ari* loaded" --
-# res_ari_model.so ships and loads on its own while the rest of ARI is
-# absent, so a `module show like res_ari` grep reports success on a box
-# where nothing can place a call. Name the two modules that matter.
-# ---------------------------------------------------------------
-ari_modules_ok() {
-  asterisk -rx "module show like ari" 2>/dev/null \
-    | grep -qE '^res_ari\.so[[:space:]].*Running' || return 1
-  asterisk -rx "module show like stasis" 2>/dev/null \
-    | grep -qE '^res_stasis\.so[[:space:]].*Running' || return 1
-}
-
-ari_missing_report() {
-  warn "ARI is not usable on this Asterisk. Present modules:"
-  asterisk -rx "module show like ari" 2>/dev/null | sed 's/^/      /' || true
-  asterisk -rx "module show like stasis" 2>/dev/null | sed 's/^/      /' || true
-  warn "On disk:"
-  ls /usr/lib/asterisk/modules/ 2>/dev/null | grep -E 'ari|stasis' | sed 's/^/      /' || echo "      (none)"
-  warn "res_ari.so and res_stasis.so are missing or will not load. This build of"
-  warn "Asterisk was made without ARI, which the campaign engine cannot work without."
-  warn "Build one with ARI instead:  sudo bash scripts/install-asterisk-source.sh"
-}
-
 say()  { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m    %s\033[0m\n' "$*"; }
 die()  { printf '\n\033[1;31mERROR: %s\033[0m\n' "$*" >&2; exit 1; }
 
 [ "$(id -u)" -eq 0 ] || die "run as root (sudo bash scripts/install.sh)"
 [ -f .env ] || die ".env not found — copy .env.example to .env and fill it in first"
+
+# ast_module_dir / ari_modules_ok / pjsip_modules_ok / fix_shadowed_pjproject ...
+# shellcheck source=scripts/lib-asterisk.sh
+. "$HERE/scripts/lib-asterisk.sh"
 
 # shellcheck disable=SC1091
 set -a; . ./.env; set +a
@@ -125,11 +105,42 @@ say "Verifying ARI support is present"
 systemctl start asterisk >/dev/null 2>&1 || true
 # Asterisk needs a moment after start before the CLI answers.
 for _ in $(seq 1 15); do ari_modules_ok && break; sleep 1; done
+
 if ari_modules_ok; then
   echo "    res_ari.so and res_stasis.so are loaded."
 else
+  # Packaged Asterisk builds ship without ARI more often than not, and there is
+  # no package to add afterwards -- the fix is a build that includes it. Do that
+  # here rather than ending the install with homework.
   ari_missing_report
-  die "ARI is required — stopping before any config is overwritten."
+  say "No ARI in this Asterisk — rebuilding from source with it enabled"
+  warn "this takes 10-40 minutes; everything after it depends on ARI"
+  bash "$HERE/scripts/install-asterisk-source.sh" \
+    || die "source build failed — the build log is /var/log/shadowpbx-asterisk-build.log"
+  systemctl restart asterisk >/dev/null 2>&1 || true
+  for _ in $(seq 1 20); do ari_modules_ok && break; sleep 1; done
+  if ! ari_modules_ok; then
+    ari_missing_report
+    die "still no ARI after a source build — send Claude the output above."
+  fi
+  echo "    ARI present after rebuild."
+fi
+
+# PJSIP is how every call leaves this box. It breaks in one specific way after a
+# source build over a packaged one, so check it here and repair it in place.
+say "Verifying PJSIP is loaded"
+if pjsip_modules_ok; then
+  echo "    chan_pjsip.so is loaded."
+else
+  fix_shadowed_pjproject
+  systemctl restart asterisk >/dev/null 2>&1 || true
+  for _ in $(seq 1 20); do pjsip_modules_ok && break; sleep 1; done
+  if pjsip_modules_ok; then
+    echo "    chan_pjsip.so loaded after clearing a shadowed pjproject library."
+  else
+    pjsip_missing_report
+    die "PJSIP will not load — no trunk can work until it does."
+  fi
 fi
 
 say "Backing up stock Asterisk config"

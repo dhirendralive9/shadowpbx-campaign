@@ -137,11 +137,20 @@ bind = 0.0.0.0:5060
     out += `
 ;---------------- ${esc(t.name)}${active ? '   [ACTIVE]' : ''} ----------------
 `;
+    // With IP authentication there is nothing to authenticate against. A trunk
+    // saved without a password must not get a half-filled auth section.
+    const hasAuth = !!(t.user && t.pass);
+
     if (t.register) {
+      // outbound_auth must not name a section that does not exist: Asterisk
+      // refuses the whole registration object, `pjsip show registrations`
+      // reports "No objects found", and the UI sits on "—" forever with no
+      // visible error. A registration with no credentials is still wrong, but
+      // it fails where you can see it.
       out += `[${id}]
 type = registration
 transport = transport-udp
-outbound_auth = ${id}-auth
+${hasAuth ? `outbound_auth = ${id}-auth` : '; no password saved for this trunk — registering without credentials'}
 server_uri = sip:${esc(t.host)}
 client_uri = sip:${esc(t.user)}@${esc(t.host)}
 endpoint = ${id}
@@ -151,14 +160,10 @@ expiration = 3600
 
 `;
     }
-    // With IP authentication there is nothing to authenticate against. Emitting
-    // an auth section anyway is harmless (it only answers challenges), but a
-    // trunk saved without a password must not get a half-filled one.
     // A registering trunk is matched on its account name, so From must carry
     // it. An IP-authenticated one is matched on source IP and usually wants a
     // real number in From instead -- an account name there earns a 403 on the
     // INVITE even though the trunk itself is accepted.
-    const hasAuth = !!(t.user && t.pass);
     if (hasAuth) {
       out += `[${id}-auth]
 type = auth
@@ -281,7 +286,14 @@ async function applySettings(s) {
 }
 
 
-const LOG_CANDIDATES = ['/var/log/asterisk/full', '/var/log/asterisk/messages'];
+// Debian packages log to messages.log; a source build's stock logger.conf
+// writes messages (no extension) and only adds `full` if you enable it. Try
+// every spelling rather than reporting "nothing captured" on a box that is
+// logging perfectly well under a different name.
+const LOG_CANDIDATES = [
+  '/var/log/asterisk/full', '/var/log/asterisk/full.log',
+  '/var/log/asterisk/messages', '/var/log/asterisk/messages.log',
+];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Tail the Asterisk log, newest lines last. */

@@ -191,10 +191,38 @@ app.post('/campaigns/:id/delete', auth, (req, res) => {
 });
 
 // ---------------------------------------------------------------- trunks
+/**
+ * Flag trunk settings that cannot work, rather than writing a config that
+ * fails silently. "Register" with no password is the one that cost real time:
+ * Asterisk refuses the registration object, `pjsip show registrations` reports
+ * nothing at all, and the UI shows an empty status forever with no error
+ * anywhere. An IP-authenticated trunk with no caller ID is the other: From
+ * falls back to the account name and the provider answers 403 on the INVITE,
+ * long after the trunk itself looks healthy.
+ */
+function trunkWarnings(t) {
+  if (!t) return [];
+  const w = [];
+  if (t.register && !t.pass) {
+    w.push('registration needs a password — if this provider authenticates by IP, untick "Register with the provider"');
+  }
+  if (!t.register && !t.callerId) {
+    w.push('no caller ID, so calls will present the account name in From; IP-authenticated providers usually reject that with a 403');
+  }
+  return w;
+}
+
 app.post('/trunks/save', auth, async (req, res) => {
   const s = store.saveTrunk(req.body);
   const r = await asterisk.applySettings(s);
-  res.redirect(back('/trunks', r.ok ? { ok: true, message: 'Trunk saved. PJSIP reloaded.' } : r));
+  if (!r.ok) return res.redirect(back('/trunks', r));
+  const saved = (s.trunks || []).find((t) => t.name === (req.body.name || '').trim())
+    || (s.trunks || [])[s.trunks.length - 1];
+  const warn = trunkWarnings(saved);
+  res.redirect(back('/trunks', {
+    ok: true,
+    message: 'Trunk saved. PJSIP reloaded.' + (warn.length ? ` Check: ${warn.join('; ')}.` : ''),
+  }));
 });
 app.post('/trunks/:id/activate', auth, async (req, res) => {
   const s = store.setActiveTrunk(req.params.id);

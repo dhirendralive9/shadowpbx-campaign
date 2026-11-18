@@ -515,7 +515,10 @@ function start(opts) {
     // 'dtmf'  — prove trunk + audio + a keypress coming back (outbound trunks)
     // 'answer'— prove the call reaches a human through the PBX inbound route
     // 'echo'   — prove audio flows BOTH ways on that route
-    mode: ['answer', 'echo'].includes(opts.mode) ? opts.mode : 'dtmf',
+    // Every mode must be listed here: an unknown one silently becomes 'dtmf',
+    // which runs a different script and reports success for a test that never
+    // ran.
+    mode: ['answer', 'echo', 'flow'].includes(opts.mode) ? opts.mode : 'dtmf',
     label: opts.label || '',
     // mode 'flow': the whole IVR, run for real against one number.
     flow: opts.flow || null,

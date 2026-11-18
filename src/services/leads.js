@@ -110,13 +110,35 @@ function parseCSVLine(line) {
   return out;
 }
 
-/** Import a CSV buffer into a new or existing list. */
+/**
+ * Does this file have a header row, or is it just numbers?
+ *
+ * A .txt export from a dialler is usually one number per line and nothing
+ * else. Requiring a header there would reject a perfectly good list, and
+ * worse, a header-less CSV silently loses its first number to the header
+ * parser. So decide by looking at the first line: if it is a phone number,
+ * there is no header.
+ */
+function looksLikeNumber(line) {
+  const first = parseCSVLine(line)[0] || '';
+  const digits = first.replace(/[^\d]/g, '');
+  return digits.length >= 7 && /^[+0-9][\d\s()+.-]*$/.test(first.trim());
+}
+
+/** Import a CSV or a plain list of numbers into a new or existing list. */
 function importCSV(listId, csvText, { dialCode }) {
   let text = String(csvText);
   if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);   // Excel BOM
 
   const lines = text.split(/\r?\n/).filter((l) => l.trim());
-  if (lines.length < 2) return { ok: false, error: 'CSV needs a header row and at least one data row' };
+  if (!lines.length) return { ok: false, error: 'That file is empty' };
+
+  const headerless = looksLikeNumber(lines[0]);
+  if (headerless) return importNumbers(listId, lines, dialCode);
+  if (lines.length < 2) {
+    return { ok: false,
+      error: 'That file has a header row but no data. For a plain list, put one phone number per line.' };
+  }
 
   const headers = parseCSVLine(lines[0])
     .map((h) => h.trim().replace(/^"(.*)"$/, '$1').replace(/^﻿/, '').toLowerCase());
@@ -159,12 +181,44 @@ function importCSV(listId, csvText, { dialCode }) {
   writeRows(listId, existing.concat(rows));
   return {
     ok: true, imported, dupes, invalid,
+    read: lines.length - 1,                 // data rows, header excluded
     total: existing.length + rows.length,
     detected: {
+      format: 'csv',
       phone: headers[iPhone] || '(first column)',
       name: iName >= 0 ? headers[iName] : (iFirst >= 0 ? `${headers[iFirst]}${iLast >= 0 ? ' + ' + headers[iLast] : ''}` : null),
       prefix: iPrefix >= 0 ? headers[iPrefix] : null,
     },
+  };
+}
+
+/**
+ * One number per line, nothing else. Also handles a single-column CSV with no
+ * header, and a trailing comma or quotes, because exports are untidy.
+ */
+function importNumbers(listId, lines, dialCode) {
+  const existing = readRows(listId);
+  const seen = new Set(existing.map((r) => r.phone));
+  const rows = [];
+  let imported = 0, dupes = 0, invalid = 0;
+
+  for (const line of lines) {
+    const raw = (parseCSVLine(line)[0] || '').trim().replace(/^"(.*)"$/, '$1');
+    const phone = normalizePhone(raw, dialCode, '');
+    if (!phone || phone.length < 7) { invalid++; continue; }
+    if (seen.has(phone)) { dupes++; continue; }
+    seen.add(phone);
+    rows.push({ phone, name: '', company: '', email: '',
+      status: 'pending', attempts: 0, outcome: '', lastAttempt: null });
+    imported++;
+  }
+
+  writeRows(listId, existing.concat(rows));
+  return {
+    ok: true, imported, dupes, invalid,
+    read: lines.length,
+    total: existing.length + rows.length,
+    detected: { format: 'numbers', phone: '(whole line)', name: null, prefix: null },
   };
 }
 

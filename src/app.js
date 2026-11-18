@@ -163,10 +163,16 @@ app.post('/leads/:id/upload', auth, upload.single('file'), (req, res) => {
   const r = leads.importCSV(l.id, text, { dialCode: l.dialCode });
   if (!r.ok) return res.redirect('/leads/' + l.id + '?err=' + encodeURIComponent(r.error));
   const d = r.detected;
-  res.redirect('/leads/' + l.id + '?msg=' + encodeURIComponent(
-    `Imported ${r.imported} — ${r.dupes} duplicates, ${r.invalid} invalid. ` +
-    `Detected phone column "${d.phone}"${d.name ? `, name "${d.name}"` : ''}` +
-    `${d.prefix ? `, prefix "${d.prefix}"` : `, country code ${l.dialCode} applied`}.`));
+  // Same four counts for both formats, so an import can be reconciled against
+  // whatever produced the file: lines read in, and where each one went.
+  const counts = `Read ${r.read} line${r.read === 1 ? '' : 's'} — `
+    + `imported ${r.imported}, ${r.dupes} duplicate${r.dupes === 1 ? '' : 's'}, `
+    + `${r.invalid} invalid. List now holds ${r.total}.`;
+  const how = d.format === 'numbers'
+    ? ` Plain number list: one number per line, country code ${l.dialCode} applied where missing.`
+    : ` CSV: phone column "${d.phone}"${d.name ? `, name "${d.name}"` : ''}`
+      + `${d.prefix ? `, prefix "${d.prefix}"` : `, country code ${l.dialCode} applied`}.`;
+  res.redirect('/leads/' + l.id + '?msg=' + encodeURIComponent(counts + how));
 });
 
 app.post('/leads/:id/update', auth, (req, res) => {

@@ -17,18 +17,58 @@
 </div>
 
 <div class="section">
-  <div class="sec-head"><div class="sec-title">Upload CSV</div></div>
+  <div class="sec-head"><div class="sec-title">Upload leads</div>
+    <span class="muted" style="font-size:11px">CSV with a header row, or a plain list of numbers</span></div>
   <div class="card">
     <form method="post" action="/leads/<%= list.id %>/upload" enctype="multipart/form-data">
       <div class="grid-2">
-        <div class="form-group"><label class="form-label">CSV file</label>
-          <input class="form-input" type="file" name="file" accept=".csv,text/csv" required></div>
+        <div class="form-group"><label class="form-label">File</label>
+          <input class="form-input" type="file" name="file"
+                 accept=".csv,.txt,.tsv,text/csv,text/plain" required>
+          <span class="muted" style="font-size:11px">.csv or .txt — the format is detected from the
+            first line, so you do not have to say which.</span></div>
       </div>
       <button class="btn btn-primary" type="submit">Import</button>
-      <span class="muted" style="font-size:11px;margin-left:8px">
-        Header row required. Auto-detects phone, name (or first/last), company, email and a country-code column.
-        Duplicates within the list are skipped.</span>
     </form>
+
+    <div class="grid-2" style="margin-top:18px">
+      <div>
+        <div class="form-label">CSV — with a header row</div>
+        <pre class="out-pre" style="margin:4px 0">phone,name,company,email
++4915112345678,Anna Weber,Weber GmbH,anna@weber.de
+004915798765432,Jonas Klein,,
+15551234567,Pat Lee,Lee Co,pat@lee.com</pre>
+        <span class="muted" style="font-size:11px">
+          Only the phone column is required and it may be named
+          <span class="mono">phone</span>, <span class="mono">number</span>,
+          <span class="mono">mobile</span>, <span class="mono">cell</span>,
+          <span class="mono">tel</span> or <span class="mono">msisdn</span>. If none of those match,
+          the first column is used. <span class="mono">first name</span> and
+          <span class="mono">last name</span> are joined when there is no
+          <span class="mono">name</span>. A <span class="mono">prefix</span> or
+          <span class="mono">country_code</span> column overrides this list's country code for that row.
+        </span>
+      </div>
+      <div>
+        <div class="form-label">Text — one number per line</div>
+        <pre class="out-pre" style="margin:4px 0">+4915112345678
+004915798765432
+015112345678
+9178 988 634</pre>
+        <span class="muted" style="font-size:11px">
+          No header, no other columns. Spaces, dashes, brackets and dots are ignored.
+          Numbers that are already international (<span class="mono">+</span> or
+          <span class="mono">00</span>) are kept as they are; the rest get this list's country code
+          <span class="mono"><%= list.dialCode %></span>, with a leading national
+          <span class="mono">0</span> dropped.
+        </span>
+      </div>
+    </div>
+
+    <div class="muted" style="font-size:11px;margin-top:12px">
+      Either way: duplicates already in this list are skipped, anything under 7 digits is counted
+      invalid, and the import reports lines read, imported, duplicates and invalid.
+    </div>
   </div>
 </div>
 

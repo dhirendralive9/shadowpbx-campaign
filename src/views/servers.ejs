@@ -47,7 +47,11 @@
                style="font-size:18px;letter-spacing:1px">
         <span class="muted" style="font-size:11px">
           Add this on <%= act.name %> under <span class="mono">/routes</span> as an inbound route,
-          pointing at the ring group or queue for this campaign.</span>
+          pointing at the ring group or queue for this campaign.
+          <strong>Also add this server's public IP</strong> to
+          <span class="mono">TRUNK_TRUSTED_IPS</span> in the PBX's
+          <span class="mono">.env</span> — without it the PBX answers
+          <em>unallocated number</em> and the call never reaches the queue.</span>
       </div>
       <div class="form-group">
         <label class="form-label">&nbsp;</label>
@@ -112,6 +116,12 @@
             queue. It reports who is on it and who is free.</span></div>
         <div class="form-group"><label class="form-label">API key</label>
           <input class="form-input" name="apiKey" id="s-key" type="password" placeholder="not set"></div>
+        <div class="form-group"><label class="form-label">WebSocket URL
+            <span class="muted">(optional)</span></label>
+          <input class="form-input" name="wsUrl" id="s-ws" placeholder="discovered automatically">
+          <span class="muted" style="font-size:11px">ShadowPBX shows one when you create the key, but
+            it is sent in the API reply too — leave this blank unless the PBX is behind a proxy that
+            advertises a host you cannot reach.</span></div>
       </div>
       <div class="muted" style="font-size:11px;margin-bottom:16px">
         No agent extension here on purpose: the queue decides who takes the call. Saving generates a
@@ -125,16 +135,18 @@
 
 <script>
 var SERVERS = <%- JSON.stringify(settings.servers.map(function(s){
-  return {id:s.id,name:s.name,host:s.host,port:s.port,apiUrl:s.apiUrl,routeNumber:s.routeNumber}; })) %>;
+  return {id:s.id,name:s.name,host:s.host,port:s.port,apiUrl:s.apiUrl,wsUrl:s.wsUrl,
+          routeNumber:s.routeNumber}; })) %>;
 var ACTIVE_SERVER_ID = <%- JSON.stringify(settings.activeServerId || '') %>;
 var s_id=document.getElementById('s-id'),s_name=document.getElementById('s-name'),
  s_host=document.getElementById('s-host'),s_port=document.getElementById('s-port'),
- s_api=document.getElementById('s-api'),s_key=document.getElementById('s-key');
+ s_api=document.getElementById('s-api'),s_key=document.getElementById('s-key'),
+ s_ws=document.getElementById('s-ws');
 
 function editServer(id){
   var s=SERVERS.find(function(x){return x.id===id;}); if(!s) return;
   s_id.value=s.id; s_name.value=s.name||''; s_host.value=s.host||''; s_port.value=s.port||5060;
-  s_api.value=s.apiUrl||'';
+  s_api.value=s.apiUrl||''; s_ws.value=s.wsUrl||'';
   s_key.placeholder='•••••••• (unchanged)'; s_key.value='';
   document.getElementById('form-title').textContent='Edit server — '+(s.name||'');
   document.getElementById('server-form').scrollIntoView({behavior:'smooth'});

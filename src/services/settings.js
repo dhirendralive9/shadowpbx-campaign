@@ -168,6 +168,9 @@ function saveServer(data) {
     // Agents come from the ring group or queue behind apiUrl, so there is no
     // single extension to dial any more.
     apiUrl: (data.apiUrl || '').trim(),
+    // Optional: only needed when the PBX advertises a URL we cannot reach,
+    // which happens behind a proxy that rewrites the host.
+    wsUrl: (data.wsUrl || '').trim(),
   };
   const existing = data.id ? s.servers.find((x) => x.id === data.id) : null;
   if (existing) {

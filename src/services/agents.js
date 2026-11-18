@@ -113,11 +113,25 @@ async function pollOnce(rec) {
 }
 
 // ------------------------------------------------------------------- WS
+/**
+ * Where to open the socket, in order of trust:
+ *   1. what the operator pasted, if they pasted one
+ *   2. what the PBX advertised in its REST reply -- it knows its own public
+ *      hostname, which may differ from ours behind a proxy
+ *   3. a guess from the API URL
+ *
+ * The guess appends /ws as well as swapping the scheme. Swapping the scheme
+ * alone points the socket at the REST endpoint, which answers 404 to an
+ * upgrade -- a silent fall back to polling that looks like a PBX that never
+ * pushes.
+ */
 function wsUrlFor(rec) {
+  if (rec.server.wsUrl) return rec.server.wsUrl;
   if (rec.wsUrl) return rec.wsUrl;
   try {
     const u = new URL(rec.server.apiUrl);
     u.protocol = u.protocol === 'https:' ? 'wss:' : 'ws:';
+    u.pathname = u.pathname.replace(/\/+$/, '') + '/ws';
     return u.toString();
   } catch (e) { return ''; }
 }
@@ -206,7 +220,8 @@ function sync(settings) {
     const rec = live.get(sv.id);
     if (!rec) { if (sv.apiUrl) startOne(sv); continue; }
     // Reconnect only when something that defines the connection changed.
-    if (rec.server.apiUrl !== sv.apiUrl || rec.server.apiKey !== sv.apiKey) {
+    if (rec.server.apiUrl !== sv.apiUrl || rec.server.apiKey !== sv.apiKey
+        || rec.server.wsUrl !== sv.wsUrl) {
       stopOne(sv.id);
       if (sv.apiUrl) startOne(sv);
     } else {

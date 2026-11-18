@@ -79,6 +79,19 @@ Saving a server generates a 12-digit number, shown on the Servers tab. Add it
 on ShadowPBX under `/routes` as an **inbound route** pointing at the ring group
 or queue that this campaign feeds.
 
+**The PBX must trust this server's IP**, or the call never reaches the route.
+ShadowPBX classifies an INVITE by source IP: trusted trunk sources are matched
+against inbound routes, anything else can only ring an extension — never a ring
+group or queue. An untrusted source gets hangup cause 1, *unallocated number*,
+which looks like a wrong DID and costs an hour in the wrong place.
+
+On the PBX, in `/opt/shadowpbx/.env`:
+
+```bash
+TRUNK_TRUSTED_IPS=<this server's public IP>   # comma-separated, CIDR allowed
+systemctl restart shadowpbx
+```
+
 When a lead presses 1, the campaign module sends the call to that number over
 the SIP leg to the PBX; the queue picks the agent. The campaign module does not
 choose an agent and does not reserve one — it only decides whether to dial at

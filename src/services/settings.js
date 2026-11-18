@@ -171,6 +171,11 @@ function saveServer(data) {
     // Optional: only needed when the PBX advertises a URL we cannot reach,
     // which happens behind a proxy that rewrites the host.
     wsUrl: (data.wsUrl || '').trim(),
+    // How often to ask the PBX for agent availability when the WebSocket is
+    // not carrying it. A busy PBX does not want a request every five seconds
+    // from every campaign server, and availability that is a minute old is
+    // still far better than none.
+    agentPollSeconds: Math.max(5, Math.min(600, parseInt(data.agentPollSeconds, 10) || 60)),
   };
   const existing = data.id ? s.servers.find((x) => x.id === data.id) : null;
   if (existing) {

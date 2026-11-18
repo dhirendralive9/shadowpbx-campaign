@@ -424,6 +424,23 @@ app.post('/api/trunks/:id/test-call', auth, (req, res) => {
   }
 });
 
+/** Ask the PBX now, instead of waiting for the next poll. */
+app.post('/api/servers/:id/agents/refresh', auth, async (req, res) => {
+  const s = store.load();
+  const sv = (s.servers || []).find((x) => x.id === req.params.id);
+  if (!sv) return res.status(404).json({ ok: false, error: 'No such server' });
+  res.json(await agents.refresh(sv.id));
+});
+
+/** Counters accumulate across runs; this is how you start a clean test. */
+app.post('/campaigns/:id/reset-stats', auth, (req, res) => {
+  campaigns.saveStats(req.params.id, {
+    dialed: 0, answered: 0, heardPrompt: 0, confirmed: 0,
+    noKeypress: 0, optedOut: 0, failed: 0, lastFailure: '',
+  });
+  res.redirect('/campaigns?msg=' + encodeURIComponent('Counters reset.'));
+});
+
 /** Live agent availability for one server — what pacing will read. */
 app.get('/api/servers/:id/agents', auth, (req, res) => {
   const s = store.load();

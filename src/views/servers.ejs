@@ -57,6 +57,8 @@
       <div class="form-group">
         <label class="form-label">&nbsp;</label>
         <button class="btn" type="button" onclick="copyRoute()">Copy number</button>
+        <button class="btn" type="button" id="ag-refresh"
+                onclick="refreshAgents('<%= act.id %>')">Refresh agents</button>
         <form class="inline-form" method="post" action="/servers/<%= act.id %>/regenerate-route"
               onsubmit="return confirm('Generate a new route number?\n\nCalls stop reaching agents until you repoint the inbound route on the PBX.')">
           <button class="btn btn-sm" type="submit">Regenerate</button></form>
@@ -125,6 +127,12 @@
             queue. It reports who is on it and who is free.</span></div>
         <div class="form-group"><label class="form-label">API key</label>
           <input class="form-input" name="apiKey" id="s-key" type="password" placeholder="not set"></div>
+        <div class="form-group"><label class="form-label">Agent poll interval (s)</label>
+          <input class="form-input" name="agentPollSeconds" id="s-poll" type="number"
+                 min="5" max="600" value="60">
+          <span class="muted" style="font-size:11px">Only used when the WebSocket is not pushing.
+            A reading stays usable for three times this, so 60s tolerates a two-minute outage
+            without the dialler going dark.</span></div>
         <div class="form-group"><label class="form-label">WebSocket URL
             <span class="muted">(optional)</span></label>
           <input class="form-input" name="wsUrl" id="s-ws" placeholder="discovered automatically">
@@ -145,17 +153,17 @@
 <script>
 var SERVERS = <%- JSON.stringify(settings.servers.map(function(s){
   return {id:s.id,name:s.name,host:s.host,port:s.port,apiUrl:s.apiUrl,wsUrl:s.wsUrl,
-          routeNumber:s.routeNumber}; })) %>;
+          agentPollSeconds:s.agentPollSeconds,routeNumber:s.routeNumber}; })) %>;
 var ACTIVE_SERVER_ID = <%- JSON.stringify(settings.activeServerId || '') %>;
 var s_id=document.getElementById('s-id'),s_name=document.getElementById('s-name'),
  s_host=document.getElementById('s-host'),s_port=document.getElementById('s-port'),
  s_api=document.getElementById('s-api'),s_key=document.getElementById('s-key'),
- s_ws=document.getElementById('s-ws');
+ s_ws=document.getElementById('s-ws'),s_poll=document.getElementById('s-poll');
 
 function editServer(id){
   var s=SERVERS.find(function(x){return x.id===id;}); if(!s) return;
   s_id.value=s.id; s_name.value=s.name||''; s_host.value=s.host||''; s_port.value=s.port||5060;
-  s_api.value=s.apiUrl||''; s_ws.value=s.wsUrl||'';
+  s_api.value=s.apiUrl||''; s_ws.value=s.wsUrl||''; s_poll.value=s.agentPollSeconds||60;
   s_key.placeholder='•••••••• (unchanged)'; s_key.value='';
   document.getElementById('form-title').textContent='Edit server — '+(s.name||'');
   document.getElementById('server-form').scrollIntoView({behavior:'smooth'});
@@ -192,6 +200,23 @@ function describe(a){
   return a.available+' free of '+a.total+(a.group?' · '+a.group:'')
        + ' · '+(a.transport==='ws'?'live':'polling');
 }
+function refreshAgents(id){
+  var b=document.getElementById('ag-refresh');
+  if(b){ b.disabled=true; b.textContent='Refreshing…'; }
+  api('/api/servers/'+id+'/agents/refresh',{method:'POST'})
+    .then(function(a){
+      if(b){ b.disabled=false; b.textContent='Refresh agents'; }
+      var c=document.getElementById('ag-count');
+      if(c) c.textContent = a.fresh ? a.available : '—';
+      var d=document.getElementById('ag-detail');
+      if(d) d.textContent = a.fresh ? describe(a) : (a.error||'the PBX did not answer');
+    })
+    .catch(function(e){
+      if(b){ b.disabled=false; b.textContent='Refresh agents'; }
+      alert('Could not reach the PBX: '+e.message);
+    });
+}
+
 function pollAgents(){
   SERVERS.forEach(function(sv){
     api('/api/servers/'+sv.id+'/agents').then(function(a){

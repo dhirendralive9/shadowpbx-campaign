@@ -39,6 +39,9 @@
                 onsubmit="return confirm('Stop <%= c.name %>? Calls in progress are dropped.')">
             <button class="btn btn-sm" type="submit">Stop</button></form>
           <a class="btn btn-sm" href="/campaigns/<%= c.id %>">Edit</a>
+          <form class="inline-form" method="post" action="/campaigns/<%= c.id %>/reset-stats"
+                onsubmit="return confirm('Reset the counters for <%= c.name %>?')">
+            <button class="btn btn-sm" type="submit">Reset stats</button></form>
           <form class="inline-form" method="post" action="/campaigns/<%= c.id %>/delete"
                 onsubmit="return confirm('Delete campaign <%= c.name %>?')">
             <button class="btn btn-sm btn-danger" type="submit">Delete</button></form>

@@ -22,8 +22,10 @@ const EventEmitter = require('events');
 let WS = typeof globalThis.WebSocket === 'function' ? globalThis.WebSocket : null;
 if (!WS) { try { WS = require('ws'); } catch (e) { WS = null; } }
 
-const POLL_MS = 5000;           // REST cadence when the socket is down
-const STALE_MS = 20000;         // older than this and we stop believing it
+const DEFAULT_POLL_S = 60;      // REST cadence when the socket is not pushing
+// How long a reading stays usable. Deliberately a multiple of the poll: a
+// 60-second cadence expiring after 20 would spend most of its life dark.
+const staleMsFor = (pollSeconds) => Math.max(30000, pollSeconds * 3000);
 const RETRY_MS = 800;           // one quick retry before calling a poll failed
 const BACKOFF_MS = [1000, 2000, 5000, 10000, 30000];
 
@@ -31,6 +33,9 @@ const bus = new EventEmitter();
 const live = new Map();         // serverId -> connection record
 
 const now = () => Date.now();
+
+const pollSecondsOf = (sv) =>
+  Math.max(5, Math.min(600, parseInt(sv && sv.agentPollSeconds, 10) || DEFAULT_POLL_S));
 
 function blank(server) {
   return {
@@ -216,10 +221,10 @@ function startOne(server) {
   live.set(server.id, rec);
   pollOnce(rec).then(() => openSocket(rec));
   rec.timer = setInterval(() => {
-    // Poll whenever the socket is not carrying data. Cheap, and it is what
-    // keeps `fresh` true through a silent socket.
+    // Only when the socket is not carrying data: a live socket pushes changes
+    // as they happen and makes this cadence irrelevant.
     if (!rec.ws || rec.ws.readyState !== 1) pollOnce(rec);
-  }, POLL_MS);
+  }, pollSecondsOf(server) * 1000);
   return rec;
 }
 
@@ -243,7 +248,8 @@ function sync(settings) {
     if (!rec) { if (sv.apiUrl) startOne(sv); continue; }
     // Reconnect only when something that defines the connection changed.
     if (rec.server.apiUrl !== sv.apiUrl || rec.server.apiKey !== sv.apiKey
-        || rec.server.wsUrl !== sv.wsUrl) {
+        || rec.server.wsUrl !== sv.wsUrl
+        || pollSecondsOf(rec.server) !== pollSecondsOf(sv)) {
       stopOne(sv.id);
       if (sv.apiUrl) startOne(sv);
     } else {
@@ -264,7 +270,8 @@ function status(id) {
       { fresh: false, reason: 'not configured', wsSupported: !!WS, ageMs: null });
   }
   const age = now() - rec.state.updatedAt;
-  const fresh = rec.state.updatedAt > 0 && age < STALE_MS;
+  const staleAfter = staleMsFor(pollSecondsOf(rec.server));
+  const fresh = rec.state.updatedAt > 0 && age < staleAfter;
   return Object.assign({}, rec.state, {
     fresh,
     // Between a failed poll and STALE_MS the last good reading still stands:
@@ -272,7 +279,8 @@ function status(id) {
     // are running on it, so the UI can show "8s ago" instead of "?".
     degraded: fresh && !rec.state.connected,
     ageMs: rec.state.updatedAt ? age : null,
-    staleAfterMs: STALE_MS,
+    staleAfterMs: staleAfter,
+    pollSeconds: pollSecondsOf(rec.server),
     wsSupported: !!WS,
   });
 }
@@ -283,4 +291,12 @@ function availableNow(id) {
   return st.fresh ? st.available : 0;
 }
 
-module.exports = { sync, status, availableNow, stopOne, bus, STALE_MS };
+/** Ask the PBX right now, whatever the cadence says. */
+async function refresh(id) {
+  const rec = live.get(id);
+  if (!rec) return { ok: false, error: 'no agent feed for this server' };
+  await pollOnce(rec);
+  return { ok: status(id).fresh, ...status(id) };
+}
+
+module.exports = { sync, status, availableNow, refresh, stopOne, bus, staleMsFor };

@@ -5,23 +5,39 @@
     <a class="btn btn-sm btn-primary" href="/campaigns/new">+ New campaign</a></div>
   <div class="card">
     <% if (!campaigns.length) { %>
-      <div class="empty">No campaigns yet. A campaign ties together a trunk, a server, a lead list and the IVR flow.</div>
+      <div class="empty">No campaigns yet. A campaign ties together a trunk, a server, a lead list and an IVR flow.</div>
     <% } else { %>
     <table class="tbl"><thead><tr>
-      <th>Name</th><th>Trunk</th><th>Server</th><th>Leads</th><th>Pacing</th><th>Status</th><th></th>
+      <th>Name</th><th>Trunk</th><th>Leads</th><th>Pacing</th><th>Status</th><th>Live</th><th></th>
     </tr></thead><tbody>
     <% campaigns.forEach(function(c){
          var t=(settings.trunks||[]).find(function(x){return x.id===c.trunkId;});
          var sv=(settings.servers||[]).find(function(x){return x.id===c.serverId;});
-         var ll=lists.find(function(x){return x.id===c.leadListId;}); %>
+         var ll=lists.find(function(x){return x.id===c.leadListId;});
+         var running = c.status==='running'; %>
       <tr>
-        <td><strong><%= c.name %></strong></td>
-        <td><%= t ? t.name : '<span class="pill p-err">missing</span>' %></td>
-        <td><%= sv ? sv.name : '<span class="pill p-err">missing</span>' %></td>
-        <td><%= ll ? ll.name + ' (' + ll.total + ')' : '<span class="pill p-err">missing</span>' %></td>
-        <td class="muted" style="font-size:11px"><%= c.pacing.linesPerAgent %>×/agent, max <%= c.pacing.maxConcurrent %></td>
-        <td><span class="pill <%= c.status==='running'?'p-ok':'p-gray' %>"><%= c.status %></span></td>
+        <td><strong><%= c.name %></strong>
+          <div class="muted" style="font-size:11px"><%= sv ? sv.name : 'server missing' %></div></td>
+        <td><%- t ? t.name : '<span class="pill p-err">missing</span>' %></td>
+        <td><%- ll ? ll.name + ' (' + ll.total + ')' : '<span class="pill p-err">missing</span>' %></td>
+        <td class="muted" style="font-size:11px">
+          <%= (c.pacing.strategy || 'power') === 'predictive'
+                ? 'predictive ' + c.pacing.linesPerAgent + '×/agent' : 'power' %>,
+          max <%= c.pacing.maxConcurrent %><%= c.pacing.callsPerHourCap ? ', ' + c.pacing.callsPerHourCap + '/h' : '' %></td>
+        <td><span class="pill <%= running?'p-ok':(c.status==='paused'?'p-warn':'p-gray') %>"
+                 id="st-<%= c.id %>"><%= c.status %></span></td>
+        <td class="mono" style="font-size:11px" id="live-<%= c.id %>">—</td>
         <td style="text-align:right;white-space:nowrap">
+          <% if (!running) { %>
+            <form class="inline-form" method="post" action="/campaigns/<%= c.id %>/start">
+              <button class="btn btn-sm btn-primary" type="submit">Start</button></form>
+          <% } else { %>
+            <form class="inline-form" method="post" action="/campaigns/<%= c.id %>/pause">
+              <button class="btn btn-sm" type="submit">Pause</button></form>
+          <% } %>
+          <form class="inline-form" method="post" action="/campaigns/<%= c.id %>/stop"
+                onsubmit="return confirm('Stop <%= c.name %>? Calls in progress are dropped.')">
+            <button class="btn btn-sm" type="submit">Stop</button></form>
           <a class="btn btn-sm" href="/campaigns/<%= c.id %>">Edit</a>
           <form class="inline-form" method="post" action="/campaigns/<%= c.id %>/delete"
                 onsubmit="return confirm('Delete campaign <%= c.name %>?')">
@@ -33,4 +49,96 @@
     <% } %>
   </div>
 </div>
+
+<% campaigns.forEach(function(c){ %>
+<div class="section" data-dash="<%= c.id %>">
+  <div class="sec-head"><div class="sec-title"><%= c.name %> — live</div>
+    <span class="muted" style="font-size:11px" id="note-<%= c.id %>"></span></div>
+
+  <div class="kpi-row">
+    <div class="kpi"><div class="kpi-top"><span class="kpi-label">Agents free</span></div>
+      <div class="kpi-val" id="ag-free-<%= c.id %>">—</div>
+      <div class="kpi-sub" id="ag-sub-<%= c.id %>">on the queue</div></div>
+    <div class="kpi"><div class="kpi-top"><span class="kpi-label">Agents on a call</span></div>
+      <div class="kpi-val" id="ag-busy-<%= c.id %>">—</div>
+      <div class="kpi-sub">busy right now</div></div>
+    <div class="kpi"><div class="kpi-top"><span class="kpi-label">Calls live</span></div>
+      <div class="kpi-val" id="k-live-<%= c.id %>">—</div>
+      <div class="kpi-sub" id="k-cap-<%= c.id %>">of the concurrency ceiling</div></div>
+    <div class="kpi"><div class="kpi-top"><span class="kpi-label">Leads left</span></div>
+      <div class="kpi-val" id="k-left-<%= c.id %>">—</div>
+      <div class="kpi-sub">still dialable</div></div>
+  </div>
+
+  <div class="card">
+    <table class="tbl"><thead><tr>
+      <th>Ringing the lead</th><th>In the menu</th><th>Waiting for a key</th>
+      <th>Ringing an agent</th><th>Talking to an agent</th><th>Placed this hour</th>
+    </tr></thead><tbody><tr>
+      <td class="mono" id="s-dial-<%= c.id %>">—</td>
+      <td class="mono" id="s-greet-<%= c.id %>">—</td>
+      <td class="mono" id="s-key-<%= c.id %>">—</td>
+      <td class="mono" id="s-agent-<%= c.id %>">—</td>
+      <td class="mono" id="s-bridged-<%= c.id %>">—</td>
+      <td class="mono" id="s-hour-<%= c.id %>">—</td>
+    </tr></tbody></table>
+  </div>
+
+  <div class="card" style="margin-top:10px">
+    <table class="tbl"><thead><tr>
+      <th>Dialled</th><th>Heard the prompt</th><th>Pressed something</th>
+      <th>Transferred</th><th>Opted out</th><th>No keypress</th>
+    </tr></thead><tbody><tr>
+      <td class="mono" id="t-dialed-<%= c.id %>">—</td>
+      <td class="mono" id="t-heard-<%= c.id %>">—</td>
+      <td class="mono" id="t-answered-<%= c.id %>">—</td>
+      <td class="mono" id="t-conf-<%= c.id %>">—</td>
+      <td class="mono" id="t-opt-<%= c.id %>">—</td>
+      <td class="mono" id="t-nokey-<%= c.id %>">—</td>
+    </tr></tbody></table>
+  </div>
+</div>
+<% }) %>
+
+<script>
+var CAMPAIGN_IDS = <%- JSON.stringify(campaigns.map(function(c){ return c.id; })) %>;
+var CEILINGS = <%- JSON.stringify(campaigns.reduce(function(m,c){ m[c.id]=c.pacing.maxConcurrent; return m; },{})) %>;
+
+function put(id, v){ var el=document.getElementById(id); if(el) el.textContent = v; }
+
+function refreshCampaign(id){
+  fetch('/api/campaigns/'+id+'/live',{credentials:'same-origin'})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(!d.ok) return;
+      var pill=document.getElementById('st-'+id);
+      if(pill){ pill.textContent=d.status;
+        pill.className='pill '+(d.status==='running'?'p-ok':(d.status==='paused'?'p-warn':'p-gray')); }
+
+      put('live-'+id, d.live ? d.live+' live' : '—');
+      // Stale agent data is not zero agents; say which it is, because one is a
+      // quiet campaign and the other is a broken feed.
+      put('ag-free-'+id, d.agentsFresh ? d.agentsAvailable : '?');
+      put('ag-sub-'+id, d.agentsFresh ? ('of '+d.agentsTotal+' on the queue')
+                                      : 'no fresh data from the PBX');
+      put('ag-busy-'+id, d.agentsFresh ? d.agentsOnCall : '?');
+      put('k-live-'+id, d.live);
+      put('k-cap-'+id, 'ceiling '+(CEILINGS[id]||'—'));
+      put('k-left-'+id, d.remaining);
+      put('s-dial-'+id, d.dialing);
+      put('s-greet-'+id, d.greeting);
+      put('s-key-'+id, d.awaitingKey);
+      put('s-agent-'+id, d.ringingAgent);
+      put('s-bridged-'+id, d.bridged);
+      put('s-hour-'+id, d.placedThisHour);
+      var s=d.stats||{};
+      put('t-dialed-'+id, s.dialed||0); put('t-heard-'+id, s.heardPrompt||0);
+      put('t-answered-'+id, s.answered||0); put('t-conf-'+id, s.confirmed||0);
+      put('t-opt-'+id, s.optedOut||0); put('t-nokey-'+id, s.noKeypress||0);
+      put('note-'+id, d.note||'');
+    }).catch(function(){});
+}
+function loop(){ CAMPAIGN_IDS.forEach(refreshCampaign); setTimeout(loop, 2000); }
+loop();
+</script>
 <%- include('foot') %>

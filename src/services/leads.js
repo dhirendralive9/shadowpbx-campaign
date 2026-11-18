@@ -266,7 +266,50 @@ function stats(id) {
   return { total: rows.length, by };
 }
 
+/**
+ * Leads a campaign may dial right now.
+ *
+ * "Right now" is doing a lot of work: never attempted, or attempted fewer
+ * times than allowed and the retry delay has passed. Anything the engine is
+ * already dialling is excluded by the caller, which knows what is in flight.
+ */
+function dueRows(listId, { retryAttempts = 1, retryDelayMinutes = 60, limit = 50, exclude = new Set() } = {}) {
+  const rows = readRows(listId);
+  const now = Date.now();
+  const out = [];
+  for (const r of rows) {
+    if (out.length >= limit) break;
+    if (exclude.has(r.phone)) continue;
+    if (r.status === 'done' || r.status === 'dnc' || r.status === 'removed') continue;
+    const attempts = r.attempts || 0;
+    if (attempts > retryAttempts) continue;
+    if (attempts > 0) {
+      const last = r.lastAttempt ? Date.parse(r.lastAttempt) : 0;
+      if (now - last < retryDelayMinutes * 60000) continue;
+    }
+    out.push(r);
+  }
+  return out;
+}
+
+/** Patch one lead by phone number. Rewrites the file, so batch where you can. */
+function updateRow(listId, phone, patch) {
+  const rows = readRows(listId);
+  const r = rows.find((x) => x.phone === phone);
+  if (!r) return null;
+  Object.assign(r, patch);
+  writeRows(listId, rows);
+  return r;
+}
+
+/** How many leads are left to try at all — what a campaign counts down. */
+function remaining(listId, retryAttempts = 1) {
+  return readRows(listId).filter((r) =>
+    !['done', 'dnc', 'removed'].includes(r.status) && (r.attempts || 0) <= retryAttempts).length;
+}
+
 module.exports = {
   DIR, COUNTRIES, list, get, create, update, remove, stats,
   importCSV, readRows, writeRows, normalizePhone,
+  dueRows, updateRow, remaining,
 };

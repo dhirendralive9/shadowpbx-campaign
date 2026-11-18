@@ -137,6 +137,10 @@ function finish(job, ok, result) {
   job.result = result;
   job.events.push({ at: Date.now() - job.startedAt, text: result });
   console.log(`[test ${job.id}] DONE ok=${ok}: ${result}`);
+  if (job.onFinish) {
+    // A throwing listener must not take the call handling with it.
+    try { job.onFinish(job); } catch (e) { console.error(`[test ${job.id}] onFinish: ${e.message}`); }
+  }
 }
 
 /**
@@ -570,6 +574,10 @@ function start(opts) {
     // ran.
     mode: ['answer', 'echo', 'flow'].includes(opts.mode) ? opts.mode : 'dtmf',
     label: opts.label || '',
+    // The campaign engine needs to know how each call ended; a diagnostic from
+    // the UI does not care and passes nothing.
+    onFinish: typeof opts.onFinish === 'function' ? opts.onFinish : null,
+    meta: opts.meta || null,
     // mode 'flow': the whole IVR, run for real against one number.
     flow: opts.flow || null,
     serverEndpoint: opts.serverEndpoint || '',
@@ -643,4 +651,22 @@ async function run(job) {
 
 const get = (id) => jobs.get(id) || null;
 
-module.exports = { start, get };
+/** Drop a call in progress — what stopping a campaign has to do. */
+async function hangup(id) {
+  const job = jobs.get(id);
+  if (!job) return false;
+  job._torn = true;                       // stop the watchdog racing us
+  for (const ch of [job._agentChan]) {
+    if (ch) { try { await ch.hangup(); } catch (e) {} }
+  }
+  if (job.channelId) {
+    try {
+      const client = await connect();
+      await client.channels.hangup({ channelId: job.channelId });
+    } catch (e) { /* already gone */ }
+  }
+  if (!job.finished) finish(job, false, 'Campaign stopped — call dropped.');
+  return true;
+}
+
+module.exports = { start, get, hangup };

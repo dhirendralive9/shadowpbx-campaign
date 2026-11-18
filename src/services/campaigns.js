@@ -41,6 +41,9 @@ const DEFAULT_IVR = {
 };
 
 const DEFAULT_PACING = {
+  // 'power'      — one call per free agent; nobody waits, nobody is abandoned
+  // 'predictive' — more calls than agents, betting most will not answer
+  strategy: 'power',
   linesPerAgent: 1,         // >1 = predictive overdial
   maxConcurrent: 5,
   retryAttempts: 1,
@@ -92,7 +95,11 @@ function save(data) {
     },
     pacing: {
       ...DEFAULT_PACING,
-      linesPerAgent: clamp(data.linesPerAgent, 1, 50, 1),
+      strategy: data.strategy === 'predictive' ? 'predictive' : 'power',
+      // Power dialling is one line per agent by definition; letting the field
+      // disagree with the strategy is how a "safe" campaign quietly overdials.
+      linesPerAgent: data.strategy === 'predictive'
+        ? clamp(data.linesPerAgent, 1, 10, 2) : 1,
       maxConcurrent: clamp(data.maxConcurrent, 1, 200, 5),
       retryAttempts: clamp(data.retryAttempts, 0, 5, 1),
       retryDelayMinutes: clamp(data.retryDelayMinutes, 5, 1440, 60),
@@ -127,6 +134,16 @@ function remove(id) {
   return { ok: true };
 }
 
+/** Persist counters without rewriting the rest of the campaign. */
+function saveStats(id, stats) {
+  const all = readAll();
+  const c = all.find((x) => x.id === id);
+  if (!c) return null;
+  c.stats = { ...c.stats, ...stats };
+  writeAll(all);
+  return c;
+}
+
 function setStatus(id, status) {
   const all = readAll();
   const c = all.find((x) => x.id === id);
@@ -146,4 +163,7 @@ function validate(c, settings, leadLists) {
   return out;
 }
 
-module.exports = { FILE, list, get, save, remove, setStatus, validate, DEFAULT_IVR, DEFAULT_PACING };
+module.exports = {
+  FILE, list, get, save, remove, setStatus, saveStats, validate,
+  DEFAULT_IVR, DEFAULT_PACING,
+};

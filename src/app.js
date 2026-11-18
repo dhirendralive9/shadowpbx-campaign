@@ -19,6 +19,7 @@ const leads = require('./services/leads');
 const campaigns = require('./services/campaigns');
 const testcall = require('./services/testcall');
 const ivr = require('./services/ivr');
+const dialer = require('./services/dialer');
 const agents = require('./services/agents');
 
 // swagger-client (inside ari-client) throws from a callback when ARI cannot be
@@ -141,7 +142,7 @@ app.get('/campaigns', auth, (req, res) =>
 app.get('/campaigns/new', auth, (req, res) =>
   res.render('campaign-edit', base(req, {
     active: 'campaigns', campaign: null,
-    lists: leads.list(), files: audio.list(), flows: ivr.list(),
+    lists: leads.list(), files: audio.list(), flows: ivr.list(), actions: ivr.ACTIONS,
     defaults: { ivr: campaigns.DEFAULT_IVR, pacing: campaigns.DEFAULT_PACING },
   })));
 
@@ -150,7 +151,7 @@ app.get('/campaigns/:id', auth, (req, res) => {
   if (!c) return res.redirect('/campaigns?err=' + encodeURIComponent('Campaign not found'));
   res.render('campaign-edit', base(req, {
     active: 'campaigns', campaign: c,
-    lists: leads.list(), files: audio.list(), flows: ivr.list(),
+    lists: leads.list(), files: audio.list(), flows: ivr.list(), actions: ivr.ACTIONS,
     defaults: { ivr: campaigns.DEFAULT_IVR, pacing: campaigns.DEFAULT_PACING },
   }));
 });
@@ -201,6 +202,26 @@ app.post('/leads/:id/delete', auth, (req, res) => {
 app.post('/campaigns/save', auth, (req, res) => {
   campaigns.save(req.body);
   res.redirect('/campaigns?msg=' + encodeURIComponent('Campaign saved.'));
+});
+
+app.post('/campaigns/:id/start', auth, (req, res) => {
+  const r = dialer.start(req.params.id);
+  res.redirect(back('/campaigns', r.ok ? { ok: true, message: r.message } : r));
+});
+app.post('/campaigns/:id/pause', auth, (req, res) => {
+  const r = dialer.pause(req.params.id);
+  res.redirect(back('/campaigns', r));
+});
+app.post('/campaigns/:id/stop', auth, async (req, res) => {
+  const r = await dialer.stop(req.params.id);
+  res.redirect(back('/campaigns', r));
+});
+
+/** Live counters for the campaign dashboard. */
+app.get('/api/campaigns/:id/live', auth, (req, res) => {
+  const c = campaigns.get(req.params.id);
+  if (!c) return res.status(404).json({ ok: false, error: 'No such campaign' });
+  res.json({ ok: true, ...dialer.status(req.params.id) });
 });
 
 app.post('/campaigns/:id/delete', auth, (req, res) => {
@@ -534,6 +555,10 @@ if (audio.seedBundled()) console.log('Installed the bundled test tone as campaig
 // Start watching agent availability straight away: the dialler reads it, and a
 // socket that only connects on first use connects during the first campaign.
 agents.sync(store.load());
+
+// Nothing resumes by itself after a restart: a dialler that starts calling on
+// its own after a deploy is a dialler nobody trusts.
+dialer.haltAll();
 
 app.listen(PORT, () => {
   console.log(`ShadowPBX Campaign UI on http://0.0.0.0:${PORT}  (login: ${ARI_USER})`);

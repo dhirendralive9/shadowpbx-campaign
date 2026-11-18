@@ -103,6 +103,14 @@
   <div class="sec-head"><div class="sec-title">Pacing</div></div>
   <div class="card">
     <div class="grid-3">
+      <div class="form-group"><label class="form-label">Strategy</label>
+        <select class="form-select" name="strategy" id="c-strategy" onchange="syncStrategy()">
+          <option value="power" <%= sel('power', c.pacing.strategy || 'power') %>>Power — one call per free agent</option>
+          <option value="predictive" <%= sel('predictive', c.pacing.strategy) %>>Predictive — overdial</option>
+        </select>
+        <span class="muted" style="font-size:10px">Power never abandons a caller. Predictive dials
+          more people than there are agents, betting most will not answer — faster, and some
+          confirmed leads will find nobody free.</span></div>
       <div class="form-group"><label class="form-label">Lines per agent</label>
         <input class="form-input" name="linesPerAgent" type="number" min="1" max="50" value="<%= c.pacing.linesPerAgent %>">
         <span class="muted" style="font-size:10px">1 = one call per free agent. Above 1 is predictive overdial — faster, but some confirmed callers find no agent free.</span></div>
@@ -117,6 +125,21 @@
       <div class="form-group"><label class="form-label">Retry delay (min)</label>
         <input class="form-input" name="retryDelayMinutes" type="number" min="5" max="1440" value="<%= c.pacing.retryDelayMinutes %>"></div>
     </div>
+    <script>
+    // Power dialling is one line per agent by definition; an editable field
+    // that disagrees with the strategy is how a "safe" campaign overdials.
+    function syncStrategy(){
+      var pred = document.getElementById('c-strategy').value === 'predictive';
+      var lpa = document.querySelector('[name="linesPerAgent"]');
+      lpa.disabled = !pred;
+      if (!pred) lpa.value = 1;
+      lpa.closest('.form-group').style.opacity = pred ? '1' : '0.45';
+    }
+    syncStrategy();
+    document.querySelector('form').addEventListener('submit', function(){
+      document.querySelector('[name="linesPerAgent"]').disabled = false;
+    });
+    </script>
   </div>
 </div>
 

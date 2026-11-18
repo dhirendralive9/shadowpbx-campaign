@@ -445,13 +445,62 @@ app.post('/api/servers/:id/test-call', auth, (req, res) => {
   }
 });
 
+/**
+ * Run a whole IVR flow against one number, over the active trunk.
+ *
+ * The same code path a campaign will use: greeting, keypress, the action on
+ * that key, the invalid and no-input counters, and a real transfer to the PBX
+ * route. Testing a menu by reading it back to yourself finds nothing; dialling
+ * it finds the prompt that was never uploaded and the key that does nothing.
+ */
+app.post('/api/ivr/:id/test-call', auth, (req, res) => {
+  const s = store.load();
+  const flow = ivr.get(req.params.id);
+  if (!flow) return res.status(404).json({ ok: false, error: 'No such IVR flow' });
+
+  const gaps = ivr.validate(flow);
+  if (gaps.length) {
+    return res.status(400).json({ ok: false,
+      error: `This flow still needs: ${gaps.join('; ')}.` });
+  }
+
+  const trunk = store.activeTrunk(s);
+  if (!trunk) return res.status(400).json({ ok: false, error: 'No active trunk — set one on the Trunks tab.' });
+  const server = store.activeServer(s);
+
+  const number = String(req.body.number || '').replace(/[^\d]/g, '');
+  if (number.length < 7) {
+    return res.status(400).json({ ok: false, error: 'Enter the full number including country code, digits only.' });
+  }
+
+  try {
+    const job = testcall.start({
+      number,
+      endpoint: `PJSIP/trunk-${trunk.id}`,
+      callerId: (trunk.callerId || '').replace(/[^\d]/g, ''),
+      mode: 'flow',
+      flow,
+      label: flow.name,
+      serverEndpoint: server ? `PJSIP/server-${server.id}` : '',
+      routeNumber: server ? server.routeNumber : '',
+      agentRingSeconds: req.body.agentRingSeconds,
+      sound: flow.greetingAudio,
+    });
+    res.json({ ok: true, jobId: job.id, trunk: trunk.name,
+      server: server ? server.name : null });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 app.get('/api/test-call/:jobId', auth, (req, res) => {
   const job = testcall.get(req.params.jobId);
   if (!job) return res.status(404).json({ ok: false, error: 'Unknown or expired test' });
   res.json({
     ok: true,
     state: job.state, finished: job.finished, passed: job.ok, result: job.result,
-    number: job.number, sound: job.sound, digits: job.digits, events: job.events,
+    number: job.number, sound: job.sound, digits: job.digits,
+    path: job.path || [], events: job.events,
   });
 });
 

@@ -37,6 +37,8 @@
         <td class="muted" style="font-size:11px">
           <%= f.timeoutSeconds %>s wait · <%= f.maxInvalid %> wrong presses · <%= f.maxNoInput %> silent rounds</td>
         <td style="text-align:right;white-space:nowrap">
+          <button class="btn btn-sm" type="button"
+                  onclick="openFlowTest('<%= f.id %>','<%= f.name %>')">Test call</button>
           <a class="btn btn-sm" href="/ivr?edit=<%= f.id %>">Edit</a>
           <form class="inline-form" method="post" action="/ivr/<%= f.id %>/duplicate">
             <button class="btn btn-sm" type="submit">Copy</button></form>
@@ -48,6 +50,32 @@
     <% }) %>
     </tbody></table>
     <% } %>
+  </div>
+</div>
+
+<div class="section" id="ft-section" style="display:none">
+  <div class="sec-head"><div class="sec-title" id="ft-title">Test call</div>
+    <button class="btn btn-sm" type="button"
+            onclick="document.getElementById('ft-section').style.display='none'">Close</button></div>
+  <div class="card">
+    <div class="muted" style="font-size:12px;margin-bottom:12px">
+      Calls you over the <strong>active trunk</strong> and runs this flow for real: the greeting,
+      whatever you press, the action on that key, and the wrong-press and silence counters.
+      Press the transfer key and it rings the PBX route and bridges you to an agent — the whole
+      press-1 path, end to end.
+    </div>
+    <input type="hidden" id="ft-flow">
+    <div class="grid-3">
+      <div class="form-group"><label class="form-label">Number to call</label>
+        <input class="form-input" id="ft-number" placeholder="919778988634">
+        <span class="muted" style="font-size:11px">Full number with country code, digits only.</span></div>
+      <div class="form-group"><label class="form-label">Agent ring timeout (s)</label>
+        <input class="form-input" id="ft-ring" type="number" min="10" max="120" value="30"></div>
+    </div>
+    <button class="btn btn-primary" type="button" id="ft-go" onclick="runFlowTest()">Place test call</button>
+    <span class="muted" style="font-size:11px;margin-left:8px">Answer it and press a key.</span>
+    <div id="ft-result" style="margin-top:12px"></div>
+    <pre class="out-pre" id="ft-timeline" style="display:none"></pre>
   </div>
 </div>
 
@@ -193,6 +221,76 @@ function syncRow(sel){
 
 (EXISTING_KEYS.length ? EXISTING_KEYS : [{key:'1',label:'Interested',action:'transfer',holdSeconds:30}])
   .forEach(addKey);
+
+// ---- test the flow against a real number -------------------------------
+var ftPoll=null;
+function api(url,opts){
+  var ctl=new AbortController(); var t=setTimeout(function(){ctl.abort();},15000);
+  opts=opts||{}; opts.signal=ctl.signal; opts.credentials='same-origin';
+  return fetch(url,opts).then(function(r){
+    clearTimeout(t);
+    if(!/json/.test(r.headers.get('content-type')||''))
+      throw new Error('server answered '+r.status+(r.redirected?' after redirecting to login':''));
+    return r.json();
+  }).catch(function(e){
+    clearTimeout(t);
+    throw (e&&e.name==='AbortError')?new Error('no response within 15s'):e;
+  });
+}
+function openFlowTest(id,name){
+  if(ftPoll){clearTimeout(ftPoll);ftPoll=null;}
+  var sec=document.getElementById('ft-section');
+  sec.style.display='';
+  document.getElementById('ft-title').textContent='Test call — '+name;
+  document.getElementById('ft-flow').value=id;
+  document.getElementById('ft-result').innerHTML='';
+  document.getElementById('ft-timeline').style.display='none';
+  sec.scrollIntoView({behavior:'smooth'});
+}
+function ftFail(msg){
+  var b=document.getElementById('ft-go');
+  b.disabled=false; b.textContent='Place test call';
+  document.getElementById('ft-result').innerHTML='<div class="alert alert-err">'+msg+'</div>';
+}
+function runFlowTest(){
+  if(ftPoll){clearTimeout(ftPoll);ftPoll=null;}
+  var n=document.getElementById('ft-number').value.trim();
+  if(!n) return ftFail('Enter a number to call.');
+  var b=document.getElementById('ft-go');
+  b.disabled=true; b.textContent='Calling…';
+  document.getElementById('ft-result').innerHTML='<div class="alert alert-warn">Placing the call…</div>';
+  api('/api/ivr/'+document.getElementById('ft-flow').value+'/test-call',
+      {method:'POST',headers:{'Content-Type':'application/json'},
+       body:JSON.stringify({number:n,agentRingSeconds:document.getElementById('ft-ring').value})})
+   .then(function(d){
+     if(!d.ok) return ftFail(d.error||'The server refused the test call.');
+     pollFlow(d.jobId,0,Date.now());
+   }).catch(function(e){ ftFail('Could not start the test: '+e.message); });
+}
+function pollFlow(jobId,fails,t0){
+  var b=document.getElementById('ft-go'), box=document.getElementById('ft-result'),
+      tl=document.getElementById('ft-timeline');
+  api('/api/test-call/'+jobId).then(function(d){
+    if(!d.ok) return ftFail(d.error||'The test was lost on the server.');
+    tl.style.display='';
+    tl.textContent=(d.events||[]).map(function(e){
+      return '+'+(e.at/1000).toFixed(1)+'s  '+e.text; }).join('\n');
+    tl.scrollTop=tl.scrollHeight;
+    if(d.finished){
+      b.disabled=false; b.textContent='Place test call';
+      box.innerHTML='<div class="alert '+(d.passed?'alert-ok':'alert-err')+'">'+d.result+'</div>'+
+        ((d.path&&d.path.length)?'<div class="muted" style="font-size:11px;margin-top:6px">Path: '+
+          d.path.join(' → ')+'</div>':'');
+      ftPoll=null; return;
+    }
+    if(Date.now()-t0>300000) return ftFail('Gave up waiting after 5 minutes (last state: '+d.state+').');
+    box.innerHTML='<div class="alert alert-warn">'+d.state+'…</div>';
+    ftPoll=setTimeout(function(){pollFlow(jobId,0,t0);},1000);
+  }).catch(function(e){
+    if(fails>=3) return ftFail('Lost contact with the server: '+e.message);
+    ftPoll=setTimeout(function(){pollFlow(jobId,fails+1,t0);},1500);
+  });
+}
 
 document.getElementById('ivr-form').addEventListener('submit', function(e){
   var rows = [].slice.call(document.querySelectorAll('#key-body tr'));

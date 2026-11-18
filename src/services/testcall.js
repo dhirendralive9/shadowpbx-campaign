@@ -145,7 +145,20 @@ function finish(job, ok, result) {
  * tying an answer back to the request that caused it.
  */
 async function onStasisStart(event, channel) {
+  const client = await connect().catch(() => null);
   const args = event.args || [];
+
+  // The agent leg of a flow test comes back into Stasis with its own args, so
+  // it can be matched to the job that dialled it.
+  if (args[0] === 'agent') {
+    const owner = jobs.get(args[1]);
+    if (!owner || owner.finished || !owner._onAgent) {
+      try { await channel.hangup(); } catch (e) {}
+      return;
+    }
+    return owner._onAgent(channel);
+  }
+
   if (args[0] !== 'test') return;                 // not ours -- the engine's
   const job = jobs.get(args[1]);
   if (!job || job.finished) {
@@ -188,6 +201,16 @@ async function onStasisStart(event, channel) {
         + 'either nobody pressed a key, or this carrier is not passing DTMF through.'
       : 'Call ended before the audio finished playing.');
   });
+
+  if (job.mode === 'flow') {
+    channel.on('ChannelDtmfReceived', (evt) => {
+      job.digits.push(evt.digit);
+      job._queue.push(evt.digit);
+    });
+    handled = true;                               // the runner owns the call now
+    await runFlow(job, channel, client);
+    return;
+  }
 
   if (job.mode === 'echo') {
     // Hand the channel to the dialplan and get out of the way: Stasis has no
@@ -275,6 +298,192 @@ async function onStasisStart(event, channel) {
   }
 }
 
+// ----------------------------------------------------------------- flow
+/**
+ * Play a prompt, but let a keypress cut it short.
+ *
+ * Barge-in is not a nicety: a lead who already knows the script presses 1 over
+ * the greeting, and an IVR that ignores that feels broken and costs the call.
+ */
+async function playInterruptible(job, channel, sound) {
+  if (!sound) return;
+  let pb;
+  try { pb = await channel.play({ media: `sound:${sound}` }); }
+  catch (e) { log(job, `Could not play ${sound}: ${e.message}`); return; }
+
+  await new Promise((resolve) => {
+    let done = false;
+    const finish = () => { if (!done) { done = true; clearInterval(poll); resolve(); } };
+    pb.once('PlaybackFinished', finish);
+    const poll = setInterval(() => {
+      if (job._queue.length || job.finished) {
+        try { pb.stop(); } catch (e) {}
+        finish();
+      }
+    }, 100);
+    setTimeout(finish, 120000);                   // a prompt that never ends
+  });
+}
+
+/** Wait up to ms for a digit, or null. */
+async function waitForDigit(job, ms) {
+  const until = Date.now() + ms;
+  while (Date.now() < until && !job.finished) {
+    if (job._queue.length) return job._queue.shift();
+    await sleep(100);
+  }
+  return null;
+}
+
+/**
+ * Hand the lead to an agent: ring the PBX route while hold audio plays, then
+ * bridge the two legs. This is the part worth testing for real -- everything
+ * before it is prompts, and prompts rarely surprise anyone.
+ */
+async function doTransfer(job, channel, client, key) {
+  if (!job.serverEndpoint || !job.routeNumber) {
+    finish(job, false, 'Key pressed, but this module has no active server to transfer to. '
+      + 'Add one on the Servers tab.');
+    try { await channel.hangup(); } catch (e) {}
+    return;
+  }
+
+  const bridge = client.Bridge();
+  try { await bridge.create({ type: 'mixing' }); } catch (e) {
+    finish(job, false, `Could not create the bridge: ${e.message}`);
+    return;
+  }
+
+  let agentUp = false;
+  const agentReady = new Promise((resolve) => {
+    job._onAgent = async (agentChan) => {
+      try {
+        await agentChan.answer();
+        await bridge.addChannel({ channel: [channel.id, agentChan.id] });
+        agentUp = true;
+        log(job, 'Agent answered — legs bridged', 'bridged');
+      } catch (e) {
+        log(job, `Could not bridge: ${e.message}`);
+      }
+      resolve(agentChan);
+    };
+  });
+
+  log(job, `Ringing ${job.routeNumber} on the PBX (up to ${job.agentRingSeconds}s)`, 'ringing-agent');
+  const agent = client.Channel();
+  try {
+    await agent.originate({
+      endpoint: dialString(job.serverEndpoint, job.routeNumber, false),
+      app: ARI_APP,
+      appArgs: `agent,${job.id}`,
+      timeout: job.agentRingSeconds,
+    });
+  } catch (e) {
+    finish(job, false, `Could not ring the agent: ${e.message}`);
+    try { await channel.hangup(); } catch (err) {}
+    return;
+  }
+
+  // Hold audio loops while it rings; the race ends when either the agent
+  // answers or the ring timer runs out.
+  const holdLoop = (async () => {
+    while (!agentUp && !job.finished) {
+      if (!key.holdAudio) { await sleep(300); continue; }
+      await playInterruptible(job, channel, key.holdAudio);
+      job._queue.length = 0;                      // keys pressed on hold mean nothing
+    }
+  })();
+
+  const timer = sleep((key.holdSeconds || job.agentRingSeconds) * 1000);
+  await Promise.race([agentReady, timer]);
+  await Promise.resolve(holdLoop).catch(() => {});
+
+  if (!agentUp) {
+    try { await agent.hangup(); } catch (e) {}
+    log(job, 'No agent answered');
+    await playInterruptible(job, channel, job.flow.exitAudio);
+    finish(job, false,
+      `Nobody answered on ${job.routeNumber} within ${key.holdSeconds || job.agentRingSeconds}s. `
+      + 'The flow worked; the queue had no one free, or the inbound route points somewhere quiet.');
+    try { await channel.hangup(); } catch (e) {}
+    return;
+  }
+
+  finish(job, true,
+    `Pressed ${key.key} → transferred. The lead and the agent are bridged: talk to each other, `
+    + 'and hang up when you are done. That is the whole press-1 path working.');
+}
+
+/**
+ * The flow itself: greeting, key, action, with the two exhaustion counters.
+ */
+async function runFlow(job, channel, client) {
+  const f = job.flow;
+  const byKey = new Map(f.keys.map((k) => [k.key, k]));
+  let invalid = 0, noInput = 0;
+
+  while (!job.finished) {
+    job._queue.length = 0;                        // only keys pressed from here count
+    log(job, `Playing greeting (${f.greetingAudio})`, 'greeting');
+    await playInterruptible(job, channel, f.greetingAudio);
+    if (job.finished) return;
+
+    const digit = await waitForDigit(job, (f.timeoutSeconds || 30) * 1000);
+
+    if (digit === null) {
+      noInput += 1;
+      job.path.push('no input');
+      log(job, `No key after ${f.timeoutSeconds}s (${noInput}/${f.maxNoInput})`);
+      if (noInput >= f.maxNoInput) break;
+      await playInterruptible(job, channel, f.noInputAudio);
+      continue;
+    }
+
+    const key = byKey.get(digit);
+    if (!key) {
+      invalid += 1;
+      job.path.push(`invalid ${digit}`);
+      log(job, `Pressed ${digit} — not in this menu (${invalid}/${f.maxInvalid})`);
+      if (invalid >= f.maxInvalid) break;
+      await playInterruptible(job, channel, f.invalidAudio);
+      continue;
+    }
+
+    job.path.push(`${digit} → ${key.action}`);
+    log(job, `Pressed ${digit} → ${key.action}${key.label ? ` (${key.label})` : ''}`, 'key');
+
+    if (key.action === 'repeat') {
+      // Counted as a wrong press on purpose: otherwise a lead leaning on the
+      // replay key keeps a trunk channel open indefinitely.
+      invalid += 1;
+      await playInterruptible(job, channel, key.audio);
+      if (invalid >= f.maxInvalid) break;
+      continue;
+    }
+
+    await playInterruptible(job, channel, key.audio);
+
+    if (key.action === 'transfer') return doTransfer(job, channel, client, key);
+
+    const what = {
+      optout: 'opted out — the number would be added to the DNC list',
+      remove: 'removed — the lead would be dropped from this list',
+      hangup: 'ended the call',
+    }[key.action] || key.action;
+    finish(job, true, `Pressed ${key.key} → ${what}. The flow behaved as configured.`);
+    try { await channel.hangup(); } catch (e) {}
+    return;
+  }
+
+  // Both counters end the same way: say goodbye, then hang up.
+  log(job, `Giving up after ${invalid} wrong press(es) and ${noInput} silent round(s)`);
+  await playInterruptible(job, channel, f.exitAudio);
+  finish(job, true,
+    `Ended after ${invalid} wrong press(es) and ${noInput} silent round(s), as configured. `
+    + 'This is also how an answering machine ends.');
+  try { await channel.hangup(); } catch (e) {}
+}
+
 // ------------------------------------------------------------------ api
 /** Translate a hangup cause into something that names the actual problem. */
 function causeText(code) {
@@ -308,6 +517,14 @@ function start(opts) {
     // 'echo'   — prove audio flows BOTH ways on that route
     mode: ['answer', 'echo'].includes(opts.mode) ? opts.mode : 'dtmf',
     label: opts.label || '',
+    // mode 'flow': the whole IVR, run for real against one number.
+    flow: opts.flow || null,
+    serverEndpoint: opts.serverEndpoint || '',
+    routeNumber: opts.routeNumber || '',
+    agentRingSeconds: Math.max(10, Math.min(120, parseInt(opts.agentRingSeconds, 10) || 30)),
+    digits: [],
+    path: [],                       // every step taken, for the timeline
+    _queue: [],                     // digits waiting to be consumed
     callerId: opts.callerId || '',
     confirmKey: opts.confirmKey || '1',
     optOutKey: opts.optOutKey || '2',

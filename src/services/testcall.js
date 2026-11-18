@@ -366,6 +366,7 @@ async function doTransfer(job, channel, client, key) {
   const teardown = async (who) => {
     if (job._torn) return;
     job._torn = true;
+    clearInterval(job._watch);
     log(job, `${who} hung up — clearing the other leg`);
     for (const ch of [job._agentChan, channel]) {
       if (ch) { try { await ch.hangup(); } catch (e) {} }
@@ -373,11 +374,35 @@ async function doTransfer(job, channel, client, key) {
     try { await bridge.destroy(); } catch (e) {}
   };
   channel.once('ChannelDestroyed', () => teardown('Lead'));
+  channel.once('StasisEnd', () => teardown('Lead'));
+
+  /**
+   * Watchdog, because those events are not guaranteed.
+   *
+   * A per-channel handler only fires if ARI delivers that event to this client.
+   * A dropped websocket frame, a channel that left Stasis another way, or a
+   * resource we stopped tracking all mean no event -- and a call that hangs up
+   * on one side only, with an agent stuck "connected" to nobody. Asking
+   * Asterisk directly every two seconds cannot miss it.
+   */
+  const alive = async (ch) => {
+    if (!ch) return false;
+    try { await client.channels.get({ channelId: ch.id }); return true; }
+    catch (e) { return false; }
+  };
+  job._watch = setInterval(async () => {
+    if (job._torn) return clearInterval(job._watch);
+    const [leadUp, agentUpNow] = await Promise.all([alive(channel), alive(job._agentChan)]);
+    if (!leadUp && !agentUpNow) { clearInterval(job._watch); job._torn = true; return; }
+    if (job._agentChan && (!leadUp || !agentUpNow)) await teardown(leadUp ? 'Agent' : 'Lead');
+  }, 2000);
+  if (job._watch.unref) job._watch.unref();
 
   const agentReady = new Promise((resolve) => {
     job._onAgent = async (agentChan) => {
       job._agentChan = agentChan;
       agentChan.once('ChannelDestroyed', () => teardown('Agent'));
+      agentChan.once('StasisEnd', () => teardown('Agent'));
       try {
         await agentChan.answer();
         await bridge.addChannel({ channel: [channel.id, agentChan.id] });

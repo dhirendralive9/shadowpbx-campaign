@@ -72,6 +72,10 @@ function save(data) {
     trunkId: data.trunkId || '',
     serverId: data.serverId || '',
     leadListId: data.leadListId || '',
+    // The script lives in an IVR flow now: reusable across campaigns, and
+    // edited in one place. The inline fields below are kept so campaigns saved
+    // before flows existed still load.
+    ivrFlowId: data.ivrFlowId || '',
     ivr: {
       ...DEFAULT_IVR,
       greetingAudio: data.greetingAudio || '',
@@ -136,7 +140,7 @@ function validate(c, settings, leadLists) {
   if (!c.trunkId || !(settings.trunks || []).some((t) => t.id === c.trunkId)) out.push('a trunk');
   if (!c.serverId || !(settings.servers || []).some((s) => s.id === c.serverId)) out.push('a server');
   if (!c.leadListId || !(leadLists || []).some((l) => l.id === c.leadListId)) out.push('a lead list');
-  if (!c.ivr.greetingAudio) out.push('a greeting audio');
+  if (!c.ivrFlowId) out.push('an IVR flow');
   const ll = (leadLists || []).find((l) => l.id === c.leadListId);
   if (ll && ll.total === 0) out.push('leads in the selected list');
   return out;

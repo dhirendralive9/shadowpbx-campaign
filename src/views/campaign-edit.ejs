@@ -49,49 +49,53 @@
 
 <div class="section">
   <div class="sec-head"><div class="sec-title">IVR flow</div>
-    <span class="muted" style="font-size:11px">What the lead hears at each step</span></div>
+    <span class="muted" style="font-size:11px">Built once on the IVR tab, reused by any campaign</span></div>
   <div class="card">
-    <% if (!files.length) { %>
-      <div class="alert alert-warn">No audio uploaded — add files on the <a href="/audio">Audio</a> tab first.</div>
-    <% } %>
+    <% if (!flows.length) { %>
+      <div class="alert alert-warn">No IVR flows yet — build one on the
+        <a href="/ivr">IVR</a> tab. A campaign cannot run without one.</div>
+    <% } else { %>
     <div class="grid-2">
-      <div class="form-group"><label class="form-label">1. Greeting <span class="pill p-miss" style="font-size:9px">required</span></label>
-        <select class="form-select" name="greetingAudio"><%- audioOpts(c.ivr.greetingAudio) %></select>
-        <span class="muted" style="font-size:10px">Played on answer: "press 1 if interested". Replayed up to the limit below.</span></div>
-
-      <div class="form-group"><label class="form-label">2. Confirmed <span class="muted">(after pressing <%= c.ivr.confirmKey %>)</span></label>
-        <select class="form-select" name="confirmAudio"><%- audioOpts(c.ivr.confirmAudio) %></select>
-        <span class="muted" style="font-size:10px">"Thank you, connecting you now."</span></div>
-
-      <div class="form-group"><label class="form-label">3. Hold / waiting</label>
-        <select class="form-select" name="holdAudio"><%- audioOpts(c.ivr.holdAudio) %></select>
-        <span class="muted" style="font-size:10px">Loops while the agent's phone rings.</span></div>
-
-      <div class="form-group"><label class="form-label">4. Declined <span class="muted">(opt-out key)</span></label>
-        <select class="form-select" name="declineAudio"><%- audioOpts(c.ivr.declineAudio) %></select>
-        <span class="muted" style="font-size:10px">Played before hanging up; the lead is added to DNC.</span></div>
-
-      <div class="form-group"><label class="form-label">5. No response</label>
-        <select class="form-select" name="rejectAudio"><%- audioOpts(c.ivr.rejectAudio) %></select>
-        <span class="muted" style="font-size:10px">After the last greeting with no keypress — this is how voicemails end.</span></div>
-
-      <div class="form-group"><label class="form-label">6. No agent free</label>
-        <select class="form-select" name="busyAudio"><%- audioOpts(c.ivr.busyAudio) %></select>
-        <span class="muted" style="font-size:10px">Pressed 1 but every agent was busy. The lead is retried later.</span></div>
-    </div>
-
-    <div class="grid-3" style="margin-top:6px">
-      <div class="form-group"><label class="form-label">Confirm key</label>
-        <input class="form-input" name="confirmKey" value="<%= c.ivr.confirmKey %>" maxlength="1"></div>
-      <div class="form-group"><label class="form-label">Opt-out key</label>
-        <input class="form-input" name="optOutKey" value="<%= c.ivr.optOutKey %>" maxlength="1"></div>
-      <div class="form-group"><label class="form-label">Greetings before reject</label>
-        <input class="form-input" name="maxGreetings" type="number" min="1" max="5" value="<%= c.ivr.maxGreetings %>"></div>
-      <div class="form-group"><label class="form-label">Wait per greeting (s)</label>
-        <input class="form-input" name="waitSeconds" type="number" min="3" max="30" value="<%= c.ivr.waitSeconds %>"></div>
+      <div class="form-group"><label class="form-label">Flow
+          <span class="pill p-miss" style="font-size:9px">required</span></label>
+        <select class="form-select" name="ivrFlowId" required>
+          <option value="">Select…</option>
+          <% flows.forEach(function(f){ %>
+            <option value="<%= f.id %>" <%= sel(f.id, c.ivrFlowId) %>><%= f.name %></option>
+          <% }) %>
+        </select>
+        <span class="muted" style="font-size:10px">Greeting, every key and its action, the retry
+          limits and the goodbye all live in the flow.</span></div>
       <div class="form-group"><label class="form-label">Agent ring timeout (s)</label>
-        <input class="form-input" name="agentRingSeconds" type="number" min="10" max="120" value="<%= c.ivr.agentRingSeconds %>"></div>
+        <input class="form-input" name="agentRingSeconds" type="number" min="10" max="120"
+               value="<%= c.ivr.agentRingSeconds %>">
+        <span class="muted" style="font-size:10px">How long the agent's phone rings before the lead
+          is handed back to the flow.</span></div>
     </div>
+    <% flows.forEach(function(f){ %>
+      <div class="muted" data-flow="<%= f.id %>" style="font-size:11px;margin-top:8px;display:none">
+        <strong><%= f.name %></strong> —
+        <% f.keys.forEach(function(k){ %>
+          press <span class="mono"><%= k.key %></span>:
+          <%= actions[k.action] ? actions[k.action].label.toLowerCase() : k.action %><%= k.label ? ' (' + k.label + ')' : '' %>;
+        <% }) %>
+        <%= f.timeoutSeconds %>s to answer, <%= f.maxInvalid %> wrong presses,
+        <%= f.maxNoInput %> silent rounds, then it hangs up.
+        <a href="/ivr?edit=<%= f.id %>">Edit</a>
+      </div>
+    <% }) %>
+    <script>
+    (function(){
+      var sel = document.querySelector('[name="ivrFlowId"]');
+      function show(){
+        document.querySelectorAll('[data-flow]').forEach(function(el){
+          el.style.display = el.getAttribute('data-flow') === sel.value ? 'block' : 'none';
+        });
+      }
+      sel.addEventListener('change', show); show();
+    })();
+    </script>
+    <% } %>
   </div>
 </div>
 

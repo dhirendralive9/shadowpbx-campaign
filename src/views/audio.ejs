@@ -14,9 +14,9 @@
     <table class="tbl"><thead><tr>
       <th>Name</th><th>Sound ID</th><th>Length</th><th>Size</th><th>Updated</th><th></th>
     </tr></thead><tbody>
-    <% files.forEach(function(f){ var inUse = settings.ivr.greeting === f.soundId; %>
+    <% files.forEach(function(f){ var used = inUse.has(f.soundId); %>
       <tr>
-        <td><strong><%= f.name %></strong> <% if (inUse) { %><span class="pill p-ok">in use</span><% } %>
+        <td><strong><%= f.name %></strong> <% if (used) { %><span class="pill p-ok">in use</span><% } %>
           <% if (f.builtin) { %><span class="pill">built-in</span><% } %></td>
         <td class="mono"><%= f.soundId %></td>
         <td><%= f.seconds %>s</td>

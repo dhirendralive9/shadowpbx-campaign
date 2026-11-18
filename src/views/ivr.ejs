@@ -1,39 +1,211 @@
 <%- include('head', { title: 'IVR', active: 'ivr' }) %>
 <%- include('flash') %>
+<%
+  var editing = typeof editing !== 'undefined' && editing ? editing : null;
+  function audioOpts(sel, blankLabel) {
+    var out = '<option value="">' + (blankLabel || '— none —') + '</option>';
+    files.forEach(function (f) {
+      out += '<option value="' + f.soundId + '"' + (sel === f.soundId ? ' selected' : '') + '>'
+           + f.name + ' (' + f.seconds + 's)</option>';
+    });
+    return out;
+  }
+%>
+
 <div class="section">
-  <div class="sec-head"><div class="sec-title">IVR behaviour</div>
-    <span class="muted" style="font-size:11px">What the lead hears, and how long we wait for a key</span></div>
+  <div class="sec-head"><div class="sec-title">IVR flows</div>
+    <span class="muted" style="font-size:11px">What the lead hears, and what each key does</span></div>
   <div class="card">
-    <form method="post" action="/ivr/save">
+    <% if (!flows.length) { %>
+      <div class="empty">No flows yet. Build one below — a campaign cannot run without one.</div>
+    <% } else { %>
+    <table class="tbl"><thead><tr>
+      <th>Name</th><th>Greeting</th><th>Keys</th><th>Limits</th><th></th>
+    </tr></thead><tbody>
+    <% flows.forEach(function(f){ %>
+      <tr>
+        <td><strong><%= f.name %></strong>
+          <% if (f.description) { %><div class="muted" style="font-size:11px"><%= f.description %></div><% } %></td>
+        <td class="mono" style="font-size:11px"><%= f.greetingAudio || '—' %></td>
+        <td style="font-size:12px">
+          <% f.keys.forEach(function(k){ %>
+            <span class="pill p-info" style="font-size:10px"><%= k.key %></span>
+            <%= actions[k.action] ? actions[k.action].label : k.action %><%= k.label ? ' — ' + k.label : '' %><br>
+          <% }) %>
+          <% if (!f.keys.length) { %><span class="muted">no keys</span><% } %>
+        </td>
+        <td class="muted" style="font-size:11px">
+          <%= f.timeoutSeconds %>s wait · <%= f.maxInvalid %> wrong presses · <%= f.maxNoInput %> silent rounds</td>
+        <td style="text-align:right;white-space:nowrap">
+          <a class="btn btn-sm" href="/ivr?edit=<%= f.id %>">Edit</a>
+          <form class="inline-form" method="post" action="/ivr/<%= f.id %>/duplicate">
+            <button class="btn btn-sm" type="submit">Copy</button></form>
+          <form class="inline-form" method="post" action="/ivr/<%= f.id %>/delete"
+                onsubmit="return confirm('Delete <%= f.name %>?')">
+            <button class="btn btn-sm btn-danger" type="submit">Delete</button></form>
+        </td>
+      </tr>
+    <% }) %>
+    </tbody></table>
+    <% } %>
+  </div>
+</div>
+
+<% if (!files.length) { %>
+  <div class="alert alert-warn">No audio uploaded yet — add your prompts on the
+    <a href="/audio">Audio</a> tab first, then build the flow.</div>
+<% } %>
+
+<div class="section">
+  <div class="sec-head">
+    <div class="sec-title"><%= editing ? 'Edit flow — ' + editing.name : 'Build a flow' %></div>
+    <% if (editing) { %><a class="sec-link" href="/ivr">New flow</a><% } %>
+  </div>
+  <div class="card">
+    <form method="post" action="/ivr/save" id="ivr-form">
+      <input type="hidden" name="id" value="<%= editing ? editing.id : '' %>">
+
       <div class="grid-3">
-        <div class="form-group"><label class="form-label">Greeting</label>
-          <% if (files.length) { %>
-            <select class="form-select" name="greeting">
-              <% files.forEach(function(f){ %>
-                <option value="<%= f.soundId %>" <%= settings.ivr.greeting===f.soundId?'selected':'' %>>
-                  <%= f.name %> (<%= f.seconds %>s)</option>
-              <% }) %>
-            </select>
-          <% } else { %>
-            <input class="form-input" name="greeting" value="<%= settings.ivr.greeting %>">
-          <% } %>
-        </div>
-        <div class="form-group"><label class="form-label">Confirm key</label>
-          <input class="form-input" name="confirmKey" value="<%= settings.ivr.confirmKey %>" maxlength="1"></div>
-        <div class="form-group"><label class="form-label">Opt-out key</label>
-          <input class="form-input" name="optOutKey" value="<%= settings.ivr.optOutKey %>" maxlength="1"></div>
-        <div class="form-group"><label class="form-label">Greetings before reject</label>
-          <input class="form-input" name="maxGreetings" type="number" min="1" max="5" value="<%= settings.ivr.maxGreetings %>">
-          <span class="muted" style="font-size:10px">A voicemail never presses a key, so after the last greeting the call is dropped.</span></div>
-        <div class="form-group"><label class="form-label">Wait per greeting (s)</label>
-          <input class="form-input" name="waitSeconds" type="number" min="3" max="30" value="<%= settings.ivr.waitSeconds %>"></div>
+        <div class="form-group"><label class="form-label">Name</label>
+          <input class="form-input" name="name" required placeholder="German Apple support"
+                 value="<%= editing ? editing.name : '' %>"></div>
+        <div class="form-group" style="grid-column:span 2"><label class="form-label">Description
+            <span class="muted">(optional)</span></label>
+          <input class="form-input" name="description" placeholder="Press 1 to speak to support"
+                 value="<%= editing ? editing.description : '' %>"></div>
       </div>
-      <% if (!files.length) { %>
-        <div class="alert alert-warn">No audio uploaded yet — add a greeting on the
-          <a href="/audio">Audio</a> tab first.</div>
-      <% } %>
-      <button class="btn btn-primary" type="submit">Save</button>
+
+      <!-- ── 1. the menu ─────────────────────────────────────────── -->
+      <div class="form-label" style="margin-top:14px">1 · Greeting</div>
+      <div class="grid-3">
+        <div class="form-group" style="grid-column:span 2">
+          <select class="form-select" name="greetingAudio">
+            <%- audioOpts(editing ? editing.greetingAudio : '', '— pick the menu prompt —') %>
+          </select>
+          <span class="muted" style="font-size:11px">Played as soon as the lead answers. It should say
+            what each key does.</span>
+        </div>
+      </div>
+
+      <!-- ── 2. the keys ─────────────────────────────────────────── -->
+      <div class="form-label" style="margin-top:18px">2 · Keys
+        <span class="muted" style="font-weight:normal">— what happens on each press</span></div>
+      <table class="tbl" id="key-table"><thead><tr>
+        <th style="width:70px">Key</th><th style="width:150px">Label</th>
+        <th>Audio on press</th><th>Then</th><th>Hold audio</th><th style="width:110px">Wait (s)</th><th></th>
+      </tr></thead><tbody id="key-body"></tbody></table>
+      <button class="btn btn-sm" type="button" onclick="addKey()">+ Add a key</button>
+      <span class="muted" style="font-size:11px;margin-left:8px">
+        Hold audio and wait apply to a transfer: it loops while the agent's phone rings.</span>
+
+      <!-- ── 3. when it goes wrong ───────────────────────────────── -->
+      <div class="form-label" style="margin-top:20px">3 · Wrong key, or no key</div>
+      <div class="grid-3">
+        <div class="form-group"><label class="form-label">Invalid press audio</label>
+          <select class="form-select" name="invalidAudio">
+            <%- audioOpts(editing ? editing.invalidAudio : '') %></select>
+          <span class="muted" style="font-size:11px">Then the menu plays again.</span></div>
+        <div class="form-group"><label class="form-label">Wrong presses allowed</label>
+          <input class="form-input" name="maxInvalid" type="number" min="1" max="10"
+                 value="<%= editing ? editing.maxInvalid : 3 %>">
+          <span class="muted" style="font-size:11px">After this many, the call ends.</span></div>
+        <div class="form-group"><label class="form-label">Wait for a key (s)</label>
+          <input class="form-input" name="timeoutSeconds" type="number" min="5" max="120"
+                 value="<%= editing ? editing.timeoutSeconds : 30 %>">
+          <span class="muted" style="font-size:11px">Silence this long counts as no input.</span></div>
+        <div class="form-group"><label class="form-label">No-input audio</label>
+          <select class="form-select" name="noInputAudio">
+            <%- audioOpts(editing ? editing.noInputAudio : '') %></select>
+          <span class="muted" style="font-size:11px">"Are you still there?" before replaying.</span></div>
+        <div class="form-group"><label class="form-label">Silent rounds allowed</label>
+          <input class="form-input" name="maxNoInput" type="number" min="1" max="5"
+                 value="<%= editing ? editing.maxNoInput : 2 %>">
+          <span class="muted" style="font-size:11px">An answering machine never presses a key.</span></div>
+      </div>
+
+      <!-- ── 4. the exit ─────────────────────────────────────────── -->
+      <div class="form-label" style="margin-top:18px">4 · Exit</div>
+      <div class="grid-3">
+        <div class="form-group" style="grid-column:span 2">
+          <select class="form-select" name="exitAudio">
+            <%- audioOpts(editing ? editing.exitAudio : '', '— pick the goodbye prompt —') %></select>
+          <span class="muted" style="font-size:11px">The last thing they hear before the call ends,
+            whether that is too many wrong presses or no input at all.</span>
+        </div>
+      </div>
+
+      <div style="margin-top:16px">
+        <button class="btn btn-primary" type="submit">Save flow</button>
+        <% if (editing) { %><a class="btn" href="/ivr">Cancel</a><% } %>
+      </div>
     </form>
   </div>
 </div>
+
+<script>
+var ACTIONS = <%- JSON.stringify(actions) %>;
+var AUDIO_OPTIONS = <%- JSON.stringify(files.map(function(f){
+  return {id:f.soundId, label:f.name + ' (' + f.seconds + 's)'}; })) %>;
+var EXISTING_KEYS = <%- JSON.stringify(editing ? editing.keys : []) %>;
+
+function opts(sel, blank){
+  var h = '<option value="">' + (blank || '— none —') + '</option>';
+  AUDIO_OPTIONS.forEach(function(o){
+    h += '<option value="' + o.id + '"' + (sel === o.id ? ' selected' : '') + '>' + o.label + '</option>';
+  });
+  return h;
+}
+function actionOpts(sel){
+  return Object.keys(ACTIONS).map(function(a){
+    return '<option value="' + a + '"' + (sel === a ? ' selected' : '') + '>' + ACTIONS[a].label + '</option>';
+  }).join('');
+}
+
+function addKey(k){
+  k = k || {key:'',label:'',audio:'',action:'transfer',holdAudio:'',holdSeconds:30};
+  var tr = document.createElement('tr');
+  tr.innerHTML =
+    '<td><input class="form-input mono" name="key[]" maxlength="1" style="text-align:center" value="' + (k.key||'') + '"></td>' +
+    '<td><input class="form-input" name="keyLabel[]" placeholder="Interested" value="' + (k.label||'') + '"></td>' +
+    '<td><select class="form-select" name="keyAudio[]">' + opts(k.audio) + '</select></td>' +
+    '<td><select class="form-select" name="keyAction[]" onchange="syncRow(this)">' + actionOpts(k.action) + '</select>' +
+      '<div class="muted" style="font-size:10px" data-help></div></td>' +
+    '<td><select class="form-select" name="keyHoldAudio[]">' + opts(k.holdAudio) + '</select></td>' +
+    '<td><input class="form-input" name="keyHoldSeconds[]" type="number" min="5" max="300" value="' + (k.holdSeconds||30) + '"></td>' +
+    '<td style="text-align:right"><button class="btn btn-sm btn-danger" type="button" ' +
+      'onclick="this.closest(\'tr\').remove()">Remove</button></td>';
+  document.getElementById('key-body').appendChild(tr);
+  syncRow(tr.querySelector('[name="keyAction[]"]'));
+}
+
+// Hold audio and the wait only mean anything for a transfer; showing them on
+// every row invites someone to set them and wonder why nothing plays.
+function syncRow(sel){
+  var tr = sel.closest('tr');
+  var a = ACTIONS[sel.value] || {};
+  var on = !!a.hold;
+  tr.children[4].style.opacity = on ? '1' : '0.35';
+  tr.children[5].style.opacity = on ? '1' : '0.35';
+  tr.querySelector('[name="keyHoldAudio[]"]').disabled = !on;
+  tr.querySelector('[name="keyHoldSeconds[]"]').disabled = !on;
+  tr.querySelector('[data-help]').textContent = a.help || '';
+}
+
+(EXISTING_KEYS.length ? EXISTING_KEYS : [{key:'1',label:'Interested',action:'transfer',holdSeconds:30}])
+  .forEach(addKey);
+
+document.getElementById('ivr-form').addEventListener('submit', function(e){
+  var rows = [].slice.call(document.querySelectorAll('#key-body tr'));
+  var digits = rows.map(function(r){ return r.querySelector('[name="key[]"]').value.trim(); })
+                   .filter(Boolean);
+  if (!digits.length) { e.preventDefault(); return alert('Add at least one key.'); }
+  var dupes = digits.filter(function(d,i){ return digits.indexOf(d) !== i; });
+  if (dupes.length) { e.preventDefault(); return alert('Key ' + dupes[0] + ' appears twice.'); }
+  // A disabled field posts nothing, which would misalign the parallel arrays.
+  rows.forEach(function(r){
+    r.querySelector('[name="keyHoldAudio[]"]').disabled = false;
+    r.querySelector('[name="keyHoldSeconds[]"]').disabled = false;
+  });
+});
+</script>
 <%- include('foot') %>

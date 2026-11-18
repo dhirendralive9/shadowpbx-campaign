@@ -18,6 +18,7 @@ const audio = require('./services/audio');
 const leads = require('./services/leads');
 const campaigns = require('./services/campaigns');
 const testcall = require('./services/testcall');
+const ivr = require('./services/ivr');
 const agents = require('./services/agents');
 
 // swagger-client (inside ari-client) throws from a callback when ARI cannot be
@@ -104,10 +105,20 @@ app.get('/audio', auth, async (req, res) =>
   res.render('audio', base(req, {
     active: 'audio', sub: 'audio',
     files: audio.list(), hasSox: await audio.haveSox(),
+    // A sound referenced anywhere in any IVR flow is in use; the old check
+    // only knew about one default greeting.
+    inUse: new Set(ivr.list().flatMap((f) => [
+      f.greetingAudio, f.invalidAudio, f.noInputAudio, f.exitAudio,
+      ...f.keys.flatMap((k) => [k.audio, k.holdAudio]),
+    ]).filter(Boolean)),
   })));
 
 app.get('/ivr', auth, (req, res) =>
-  res.render('ivr', base(req, { active: 'ivr', sub: 'ivr', files: audio.list() })));
+  res.render('ivr', base(req, {
+    active: 'ivr', sub: 'ivr',
+    files: audio.list(), flows: ivr.list(), actions: ivr.ACTIONS,
+    editing: req.query.edit ? ivr.get(req.query.edit) : null,
+  })));
 
 app.get('/leads', auth, (req, res) =>
   res.render('leads', base(req, { active: 'leads', lists: leads.list(), countries: leads.COUNTRIES })));
@@ -130,7 +141,7 @@ app.get('/campaigns', auth, (req, res) =>
 app.get('/campaigns/new', auth, (req, res) =>
   res.render('campaign-edit', base(req, {
     active: 'campaigns', campaign: null,
-    lists: leads.list(), files: audio.list(),
+    lists: leads.list(), files: audio.list(), flows: ivr.list(),
     defaults: { ivr: campaigns.DEFAULT_IVR, pacing: campaigns.DEFAULT_PACING },
   })));
 
@@ -139,7 +150,7 @@ app.get('/campaigns/:id', auth, (req, res) => {
   if (!c) return res.redirect('/campaigns?err=' + encodeURIComponent('Campaign not found'));
   res.render('campaign-edit', base(req, {
     active: 'campaigns', campaign: c,
-    lists: leads.list(), files: audio.list(),
+    lists: leads.list(), files: audio.list(), flows: ivr.list(),
     defaults: { ivr: campaigns.DEFAULT_IVR, pacing: campaigns.DEFAULT_PACING },
   }));
 });
@@ -306,8 +317,28 @@ app.get('/audio/:file/play', auth, (req, res) => {
 
 // ---------------------------------------------------------------- ivr
 app.post('/ivr/save', auth, (req, res) => {
-  store.saveIvr(req.body);
-  res.redirect('/ivr?msg=' + encodeURIComponent('IVR settings saved.'));
+  const all = ivr.save(req.body);
+  const saved = all.find((f) => f.id === req.body.id)
+    || all[all.length - 1];
+  // Say what is still missing rather than letting it fail on a live call.
+  const gaps = ivr.validate(saved);
+  res.redirect('/ivr?msg=' + encodeURIComponent(
+    `Saved "${saved.name}".` + (gaps.length ? ` Still needs: ${gaps.join('; ')}.` : '')));
+});
+
+app.post('/ivr/:id/duplicate', auth, (req, res) => {
+  ivr.duplicate(req.params.id);
+  res.redirect('/ivr?msg=' + encodeURIComponent('Copied — edit the copy below.'));
+});
+
+app.post('/ivr/:id/delete', auth, (req, res) => {
+  const used = campaigns.list().filter((c) => c.ivrFlowId === req.params.id);
+  if (used.length) {
+    return res.redirect('/ivr?err=' + encodeURIComponent(
+      `In use by ${used.map((c) => c.name).join(', ')} — point those at another flow first.`));
+  }
+  ivr.remove(req.params.id);
+  res.redirect('/ivr?msg=' + encodeURIComponent('IVR flow deleted.'));
 });
 
 // ---------------------------------------------------------------- api

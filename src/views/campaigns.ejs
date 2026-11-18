@@ -87,7 +87,7 @@
   <div class="card" style="margin-top:10px">
     <table class="tbl"><thead><tr>
       <th>Dialled</th><th>Heard the prompt</th><th>Pressed something</th>
-      <th>Transferred</th><th>Opted out</th><th>No keypress</th>
+      <th>Transferred</th><th>Opted out</th><th>No keypress</th><th>Never connected</th>
     </tr></thead><tbody><tr>
       <td class="mono" id="t-dialed-<%= c.id %>">—</td>
       <td class="mono" id="t-heard-<%= c.id %>">—</td>
@@ -95,7 +95,9 @@
       <td class="mono" id="t-conf-<%= c.id %>">—</td>
       <td class="mono" id="t-opt-<%= c.id %>">—</td>
       <td class="mono" id="t-nokey-<%= c.id %>">—</td>
+      <td class="mono" id="t-failed-<%= c.id %>">—</td>
     </tr></tbody></table>
+    <div class="muted" style="font-size:11px;margin-top:8px" id="t-why-<%= c.id %>"></div>
   </div>
 </div>
 <% }) %>
@@ -119,8 +121,14 @@ function refreshCampaign(id){
       // Stale agent data is not zero agents; say which it is, because one is a
       // quiet campaign and the other is a broken feed.
       put('ag-free-'+id, d.agentsFresh ? d.agentsAvailable : '?');
-      put('ag-sub-'+id, d.agentsFresh ? ('of '+d.agentsTotal+' on the queue')
-                                      : 'no fresh data from the PBX');
+      // Three different states, three different things to do about them:
+      // live, running on a reading a few seconds old, or genuinely dark.
+      var age = d.agentAgeMs == null ? null : Math.round(d.agentAgeMs/1000);
+      put('ag-sub-'+id,
+        !d.agentsFresh ? (d.agentNote || 'no data from the PBX')
+          : (d.agentTransport === 'ws' && age !== null && age < 3
+              ? 'of '+d.agentsTotal+' on the queue · live'
+              : 'of '+d.agentsTotal+' on the queue · '+(age===null?'':age+'s ago')));
       put('ag-busy-'+id, d.agentsFresh ? d.agentsOnCall : '?');
       put('k-live-'+id, d.live);
       put('k-cap-'+id, 'ceiling '+(CEILINGS[id]||'—'));
@@ -135,6 +143,9 @@ function refreshCampaign(id){
       put('t-dialed-'+id, s.dialed||0); put('t-heard-'+id, s.heardPrompt||0);
       put('t-answered-'+id, s.answered||0); put('t-conf-'+id, s.confirmed||0);
       put('t-opt-'+id, s.optedOut||0); put('t-nokey-'+id, s.noKeypress||0);
+      put('t-failed-'+id, s.failed||0);
+      put('t-why-'+id, (s.failed && s.lastFailure)
+        ? 'Last failure: '+s.lastFailure : '');
       put('note-'+id, d.note||'');
     }).catch(function(){});
 }

@@ -106,12 +106,26 @@ function recordOutcome(c, rt, phone, job) {
     lastAttempt: new Date().toISOString(),
   });
 
-  const st = c.stats;
-  if (job.heardAudio) st.heardPrompt += 1;
-  if (transferred) st.confirmed += 1;
-  else if (optedOut) st.optedOut += 1;
-  else if (job.digits && job.digits.length) st.answered += 1;
-  else st.noKeypress += 1;
+  // Classify by what actually happened on the call. Lumping failures in with
+  // "no keypress" hides the difference between a campaign nobody is
+  // interested in and a campaign whose calls are not connecting at all --
+  // which look identical on a dashboard and could not be more different.
+  const st = { ...c.stats };
+  const connected = !!(job.heardAudio || (job.digits && job.digits.length));
+  if (job.heardAudio) st.heardPrompt = (st.heardPrompt || 0) + 1;
+
+  if (transferred) st.confirmed = (st.confirmed || 0) + 1;
+  else if (optedOut) st.optedOut = (st.optedOut || 0) + 1;
+  else if (!connected) st.failed = (st.failed || 0) + 1;
+  else if (job.digits && job.digits.length) st.answered = (st.answered || 0) + 1;
+  else st.noKeypress = (st.noKeypress || 0) + 1;
+
+  // Keep the reason for the last few failures: "50 failed" is not actionable,
+  // "50 failed: hangup cause 21, call rejected" is.
+  if (!connected) {
+    st.lastFailure = job.result || '';
+    leads.updateRow(c.leadListId, phone, { outcome: job.result || 'did not connect' });
+  }
   campaigns.saveStats(c.id, st);
 }
 
@@ -127,7 +141,11 @@ function placeCall(c, rt, lead, cfg) {
     attempts: ((row && row.attempts) || 0) + 1,
     lastAttempt: new Date().toISOString(),
   });
-  c.stats.dialed += 1;
+  // Persist immediately: recordOutcome re-reads the campaign from disk, so an
+  // increment held only in this copy is thrown away when the call ends. That
+  // is how a dashboard ends up reporting 0 dialled and 50 outcomes.
+  campaigns.saveStats(c.id, { dialed: (c.stats.dialed || 0) + 1 });
+  c.stats.dialed = (c.stats.dialed || 0) + 1;
 
   try {
     const job = testcall.start({
@@ -282,7 +300,12 @@ function status(id) {
     agentsOnCall: ag && ag.agents ? ag.agents.filter((a) => a.status === 'busy').length : 0,
     remaining: c && c.leadListId ? leads.remaining(c.leadListId, c.pacing.retryAttempts) : 0,
     stats: c ? c.stats : null,
+    // The dashboard needs the PBX's own words when the feed goes quiet;
+    // "no agents free" and "the API key was rejected" are not the same problem.
     note: rt.lastError || '',
+    agentNote: ag && !ag.fresh ? (ag.error || ag.reason || 'no data from the PBX yet') : '',
+    agentAgeMs: ag ? ag.ageMs : null,
+    agentTransport: ag ? ag.transport : 'none',
     startedAt: rt.startedAt,
   };
 }

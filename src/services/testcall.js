@@ -200,6 +200,19 @@ async function onStasisStart(event, channel) {
 
   channel.on('ChannelDestroyed', () => {
     if (handled) return;
+
+    // A route test asks one question: did the call reach a person? It did --
+    // the channel answered. Whether they listened to the whole message is not
+    // the test, and hanging up mid-prompt is what anyone does once they
+    // realise it is a test call. Judging it by the trunk test's rule (audio
+    // must finish) reports a working route as broken.
+    if (job.mode === 'answer') {
+      return finish(job, true,
+        `Answered${job.label ? ` via ${job.label}` : ''}, then hung up during the message. `
+        + 'The PBX accepted the call on this route and someone picked it up — press-1 transfers '
+        + 'will land the same way.');
+    }
+
     finish(job, job.heardAudio, job.heardAudio
       ? 'Call ended with no keypress. Audio played, so the trunk and sound file are fine — '
         + 'either nobody pressed a key, or this carrier is not passing DTMF through.'

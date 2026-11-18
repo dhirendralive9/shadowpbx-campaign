@@ -24,6 +24,7 @@ if (!WS) { try { WS = require('ws'); } catch (e) { WS = null; } }
 
 const POLL_MS = 5000;           // REST cadence when the socket is down
 const STALE_MS = 20000;         // older than this and we stop believing it
+const RETRY_MS = 800;           // one quick retry before calling a poll failed
 const BACKOFF_MS = [1000, 2000, 5000, 10000, 30000];
 
 const bus = new EventEmitter();
@@ -89,7 +90,16 @@ function fail(rec, transport, err) {
 }
 
 // ----------------------------------------------------------------- REST
-async function pollOnce(rec) {
+/**
+ * One failed request is not an outage.
+ *
+ * A single dropped packet, a TLS handshake that timed out, a PBX restarting:
+ * each is a blip of a second or two. Treating any of them as "no agents" makes
+ * the dialler stop and the dashboard flash "?" — the going-dark the operator
+ * sees. So a failure is retried once, quickly, and only a sustained failure is
+ * allowed to age the data out through STALE_MS.
+ */
+async function pollOnce(rec, isRetry) {
   const { server } = rec;
   if (!server.apiUrl) return;
   try {
@@ -99,18 +109,30 @@ async function pollOnce(rec) {
       signal: AbortSignal.timeout(4000),
     });
     if (!r.ok) {
-      return fail(rec, 'rest', r.status === 401 || r.status === 403
+      // An auth failure will not fix itself on a retry; a 5xx might.
+      const authProblem = r.status === 401 || r.status === 403;
+      if (!authProblem && !isRetry) {
+        await sleep(RETRY_MS);
+        return pollOnce(rec, true);
+      }
+      return fail(rec, 'rest', authProblem
         ? `the PBX rejected the API key (HTTP ${r.status})`
         : `the agent API answered HTTP ${r.status}`);
     }
     apply(rec, await r.json(), rec.ws && rec.ws.readyState === 1 ? 'ws' : 'rest');
   } catch (e) {
+    if (!isRetry) {
+      await sleep(RETRY_MS);
+      return pollOnce(rec, true);
+    }
     const code = (e.cause && e.cause.code) || e.name;
     fail(rec, 'rest', code === 'TimeoutError' || e.name === 'TimeoutError'
       ? 'the agent API did not answer within 4s'
       : `cannot reach the agent API (${code})`);
   }
 }
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ------------------------------------------------------------------- WS
 /**
@@ -245,7 +267,12 @@ function status(id) {
   const fresh = rec.state.updatedAt > 0 && age < STALE_MS;
   return Object.assign({}, rec.state, {
     fresh,
+    // Between a failed poll and STALE_MS the last good reading still stands:
+    // agents do not vanish because one HTTP request did. `degraded` says we
+    // are running on it, so the UI can show "8s ago" instead of "?".
+    degraded: fresh && !rec.state.connected,
     ageMs: rec.state.updatedAt ? age : null,
+    staleAfterMs: STALE_MS,
     wsSupported: !!WS,
   });
 }

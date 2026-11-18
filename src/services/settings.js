@@ -198,7 +198,12 @@ function validate(s) {
   else {
     if (!t.host) missing.push('trunk host');
     if (!t.user) missing.push('trunk username');
-    if (!t.pass) missing.push('trunk password');
+    // An IP-authenticated trunk has no password by design -- demanding one
+    // leaves "not ready to place calls" on screen forever on a trunk that is
+    // working. What such a trunk does need is a caller ID: without it the From
+    // header falls back to the account name and the provider answers 403.
+    if (t.register && !t.pass) missing.push('trunk password');
+    if (!t.register && !t.callerId) missing.push('trunk caller ID');
   }
   if (!sv) missing.push('an active server');
   else {

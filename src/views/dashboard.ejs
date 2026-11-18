@@ -5,7 +5,8 @@
     <div class="kpi-val" id="k-ast">—</div><div class="kpi-sub" id="k-ver"></div></div>
   <div class="kpi"><div class="kpi-top"><span class="kpi-label">Active trunk</span></div>
     <div class="kpi-val" id="k-trunk">—</div>
-    <div class="kpi-sub"><%= (settings.trunks.find(function(t){return t.id===settings.activeTrunkId;})||{}).name || 'none selected' %></div></div>
+    <div class="kpi-sub"><%= (settings.trunks.find(function(t){return t.id===settings.activeTrunkId;})||{}).name || 'none selected' %>
+      <span id="k-trunk-rtt" class="muted"></span></div></div>
   <div class="kpi"><div class="kpi-top"><span class="kpi-label">ARI modules</span></div>
     <div class="kpi-val" id="k-ari">—</div><div class="kpi-sub">needed for call control</div></div>
   <div class="kpi"><div class="kpi-top"><span class="kpi-label">Active channels</span></div>
@@ -42,22 +43,35 @@
 </div>
 
 <script>
+var ACTIVE_TRUNK_ID = <%- JSON.stringify(settings.activeTrunkId || '') %>;
 function refresh(){
   fetch('/api/status').then(function(r){return r.json();}).then(function(d){
     if(!d.ok) return;
     var s=d.status;
     document.getElementById('k-ast').textContent = s.running?'Running':'Stopped';
     document.getElementById('k-ver').textContent = s.version||'';
+    // Registration is one way for a trunk to be healthy, not the only one. An
+    // IP-authenticated trunk never registers and is proven by its contact
+    // qualifying instead, so reading only `registrations` reported "None" on a
+    // trunk that was answering OPTIONS in 97ms.
     var reg=(s.registrations||[]).find(function(x){return /Registered/i.test(x.status);});
+    var aor='trunk-'+ACTIVE_TRUNK_ID;
+    var con=(s.contacts||[]).find(function(x){return (x.aor||'').indexOf(aor)===0;});
     document.getElementById('k-trunk').textContent =
-      reg?'Registered':((s.registrations||[])[0]||{}).status||'None';
+      reg ? 'Registered'
+          : con ? (/avail/i.test(con.status) ? 'Reachable' : con.status)
+          : ((s.registrations||[])[0]||{}).status || (ACTIVE_TRUNK_ID ? 'Unknown' : 'None');
+    document.getElementById('k-trunk-rtt').textContent =
+      (!reg && con && con.rtt) ? con.rtt+' ms' : '';
     document.getElementById('k-ari').textContent = s.ari.loaded;
     document.getElementById('k-chan').textContent = s.channels||0;
 
     document.getElementById('regs').innerHTML = (s.registrations||[]).length
       ? s.registrations.map(function(x){ return '<tr><td>'+x.name+'</td><td class="mono">'+x.uri+
         '</td><td><span class="pill '+(/Registered/i.test(x.status)?'p-ok':'p-err')+'">'+x.status+'</span></td></tr>'; }).join('')
-      : '<tr><td colspan="3" class="muted">No trunks registering</td></tr>';
+      : '<tr><td colspan="3" class="muted">No trunks registering — correct for '
+        + 'IP-authenticated trunks, which the provider recognises by source IP. '
+        + 'Their health shows under Endpoints.</td></tr>';
     document.getElementById('eps').innerHTML = (s.endpoints||[]).length
       ? s.endpoints.map(function(x){ return '<tr><td>'+x.name+'</td><td>'+x.state+'</td><td>'+x.channels+'</td></tr>'; }).join('')
       : '<tr><td colspan="3" class="muted">No endpoints configured</td></tr>';

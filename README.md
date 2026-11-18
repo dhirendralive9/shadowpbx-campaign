@@ -63,6 +63,12 @@ and on `1` bridges you to extension 2000 on ShadowPBX. It prints a single
 - [ ] Web UI
 - [ ] AMD (answering-machine detection) via Asterisk `AMD()`
 
+## Running it
+
+Day-to-day commands — services, logs, health checks, test calls — and the
+failures we have hit, with what each looks like from the outside, are in
+[OPERATIONS.md](OPERATIONS.md).
+
 ## Config notes
 
 `allow = ulaw,alaw` and `dtmf_mode = auto` in `asterisk/pjsip.conf` are

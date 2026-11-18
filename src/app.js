@@ -20,6 +20,7 @@ const campaigns = require('./services/campaigns');
 const testcall = require('./services/testcall');
 const ivr = require('./services/ivr');
 const dialer = require('./services/dialer');
+const calls = require('./services/calls');
 const agents = require('./services/agents');
 
 // swagger-client (inside ari-client) throws from a callback when ARI cannot be
@@ -221,7 +222,58 @@ app.post('/campaigns/:id/stop', auth, async (req, res) => {
 app.get('/api/campaigns/:id/live', auth, (req, res) => {
   const c = campaigns.get(req.params.id);
   if (!c) return res.status(404).json({ ok: false, error: 'No such campaign' });
-  res.json({ ok: true, ...dialer.status(req.params.id) });
+  res.json({
+    ok: true,
+    ...dialer.status(req.params.id),
+    // A rolling tail of what just happened. Live counters say how many calls
+    // are up; this says which numbers and how they ended, which is what
+    // someone watching a campaign actually wants to see.
+    recent: calls.read(req.params.id, { limit: 15 }).map((r) => ({
+      phone: r.phone, outcome: r.outcome, label: r.outcomeLabel,
+      at: r.at, seconds: r.talkSeconds, result: r.result,
+    })),
+  });
+});
+
+/**
+ * Per-call report for one campaign.
+ *
+ * Defaults to today. The date inputs are the whole filter -- a campaign that
+ * ran for three weeks should not dump three weeks into the browser because
+ * someone clicked "Report".
+ */
+app.get('/campaigns/:id/report', auth, (req, res) => {
+  const c = campaigns.get(req.params.id);
+  if (!c) return res.redirect('/campaigns?err=' + encodeURIComponent('Campaign not found'));
+  const available = calls.days(c.id);
+  const from = req.query.from || available[0] || calls.todayStr();
+  const to = req.query.to || from;
+  const rows = calls.read(c.id, {
+    from, to, outcome: req.query.outcome || '', phone: req.query.phone || '', limit: 2000,
+  });
+  res.render('campaign-report', base(req, {
+    active: 'campaigns', campaign: c, rows, available,
+    summary: calls.summary(rows), outcomes: calls.OUTCOMES,
+    filter: { from, to, outcome: req.query.outcome || '', phone: req.query.phone || '' },
+    // The table is capped so a huge day cannot hang the browser; the CSV is
+    // not, so there is always a way to get everything.
+    capped: rows.length >= 2000,
+  }));
+});
+
+app.get('/campaigns/:id/report.csv', auth, (req, res) => {
+  const c = campaigns.get(req.params.id);
+  if (!c) return res.status(404).send('No such campaign');
+  const from = req.query.from || '';
+  const to = req.query.to || '';
+  const rows = calls.read(c.id, {
+    from, to, outcome: req.query.outcome || '', phone: req.query.phone || '',
+  });
+  const slug = String(c.name || 'campaign').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const span = from === to ? (from || 'all') : `${from || 'start'}_${to || 'end'}`;
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${slug}-${span}.csv"`);
+  res.send(calls.toCsv(rows));
 });
 
 app.post('/campaigns/:id/delete', auth, (req, res) => {

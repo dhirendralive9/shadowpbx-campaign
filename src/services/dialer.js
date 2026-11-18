@@ -21,6 +21,7 @@ const ivrFlows = require('./ivr');
 const store = require('./settings');
 const agents = require('./agents');
 const testcall = require('./testcall');
+const calls = require('./calls');
 
 const TICK_MS = 2000;
 
@@ -127,6 +128,50 @@ function recordOutcome(c, rt, phone, job) {
     leads.updateRow(c.leadListId, phone, { outcome: job.result || 'did not connect' });
   }
   campaigns.saveStats(c.id, st);
+
+  // One line in the campaign's CDR. The aggregate above says how the campaign
+  // is doing; this says what happened to THIS number, which is the only thing
+  // that can answer a dispute or explain an afternoon of failures.
+  const outcome = transferred ? 'transferred'
+    : optedOut ? 'opted-out'
+    : removed ? 'removed'
+    : path.includes('noagent') || path.includes('busy') ? 'no-agent'
+    : !job.answeredAt ? (job.hangupCause ? 'failed' : 'no-answer')
+    : connected ? 'no-keypress'
+    : 'failed';
+
+  const endMs = job.finishedAt || Date.now();
+  calls.record({
+    startedAt: new Date(job.startedAt).toISOString(),
+    endedAt: new Date(endMs).toISOString(),
+    campaignId: c.id,
+    campaignName: c.name,
+    phone,
+    outcome,
+    connected,
+    heardAudio: !!job.heardAudio,
+    transferred,
+    digits: job.digits || [],
+    // Talk time starts when the lead picks up; ring time is not talk time and
+    // conflating them makes every report overstate engagement.
+    talkSeconds: job.answeredAt ? (endMs - job.answeredAt) / 1000 : 0,
+    totalSeconds: (endMs - job.startedAt) / 1000,
+    trunk: cfgTrunkName(c),
+    route: job.routeNumber || '',
+    attempt: (leads.readRows(c.leadListId).find((r) => r.phone === phone) || {}).attempts || 1,
+    hangupCause: job.hangupCause,
+    result: job.result || '',
+    path: job.path || [],
+    jobId: job.id,
+  });
+}
+
+/** Trunk name for the record, without blowing up if settings moved underneath. */
+function cfgTrunkName(c) {
+  try {
+    const t = (store.load().trunks || []).find((x) => x.id === c.trunkId);
+    return t ? t.name : '';
+  } catch (e) { return ''; }
 }
 
 function placeCall(c, rt, lead, cfg) {
@@ -301,6 +346,13 @@ function status(id) {
     ringingAgent: countByState(rt, 'ringing-agent'),
     bridged: countByState(rt, 'bridged'),
     byState,
+    // Which numbers are up right now and what each one is doing. The counters
+    // say how many; watching a campaign means wanting to see which.
+    liveCalls: [...rt.calls.entries()].map(([phone, e]) => ({
+      phone,
+      state: e.state || 'dialing',
+      seconds: Math.max(0, Math.round((Date.now() - (e.startedAt || Date.now())) / 1000)),
+    })).sort((a, b) => b.seconds - a.seconds),
     placedThisHour: placedThisHour(rt),
     agentsAvailable: ag && ag.fresh ? ag.available : 0,
     agentsTotal: ag ? ag.total : 0,

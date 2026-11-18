@@ -159,6 +159,7 @@ function log(job, text, state) {
 function finish(job, ok, result) {
   if (job.finished) return;
   job.finished = true;
+  job.finishedAt = Date.now();
   job.ok = ok;
   job.state = 'done';
   job.result = result;
@@ -198,6 +199,7 @@ async function onStasisStart(event, channel) {
   }
 
   job.channelId = channel.id;
+  job.answeredAt = Date.now();
   log(job, 'Answered', 'answered');
 
   try {
@@ -635,6 +637,10 @@ function start(opts) {
     maxGreetings: Math.max(1, Math.min(5, parseInt(opts.maxGreetings, 10) || 2)),
     waitSeconds: Math.max(3, Math.min(30, parseInt(opts.waitSeconds, 10) || 8)),
     startedAt: Date.now(),
+    answeredAt: null,               // set when the lead actually picks up
+    finishedAt: null,
+    hangupCause: null,              // SIP/Q.850 cause when it never connected
+    hangupCauseText: '',
     state: 'connecting',
     events: [],
     digits: [],
@@ -668,6 +674,8 @@ async function run(job) {
     // handler owns the outcome.
     if (job.finished || job.channelId) return;
     const code = evt.cause;
+    job.hangupCause = code;
+    job.hangupCauseText = evt.cause_txt || '';
     const extra = causeText(code);
     finish(job, false,
       `Call never connected (hangup cause ${code}${evt.cause_txt ? ': ' + evt.cause_txt : ''}).`

@@ -225,6 +225,42 @@ Also check the SIP host is the provider's hostname. A provider portal showing
 your own server's IP under "host" means the IP they accept traffic from, not an
 address to send to.
 
+## Call reports
+
+Every finished campaign call writes one line to
+
+```
+data/calls/<campaignId>/<YYYY-MM-DD>.ndjson
+```
+
+Append-only, one file per campaign per day. The format is deliberate: writing
+to a JSON array means read-parse-rewrite of the whole file per call, which at
+campaign concurrency is slow and loses the entire day if the process dies
+mid-write. A line append is one write, and a torn final line costs one record.
+
+In the UI: **Campaigns -> Report** on any campaign. Filter by date range,
+outcome or part of a number, then **Download CSV**. The on-screen table is
+capped at 2000 rows; the CSV is not, so there is always a way to get
+everything.
+
+Outcome codes, as stored:
+
+| code | meaning |
+|---|---|
+| `transferred` | pressed the confirm key and reached an agent |
+| `opted-out` | pressed the opt-out key |
+| `removed` | asked to be removed |
+| `no-agent` | pressed 1 but no agent was free |
+| `no-keypress` | heard the prompt, pressed nothing |
+| `no-answer` | never picked up |
+| `failed` | the call did not connect — `hangupCause` says why |
+
+Records survive deleting a campaign, on purpose: a report is the evidence of
+what was dialled, and deleting the campaign should not quietly destroy it. To
+remove them, delete the campaign's folder under `data/calls/`.
+
+Back them up with the rest of `data/`. Nothing prunes them.
+
 ## Call rejected instantly (hangup cause 21) on a trunk that works elsewhere
 
 Two causes, both of which produce an identical bare 403 within half a second,

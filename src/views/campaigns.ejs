@@ -39,6 +39,7 @@
                 onsubmit="return confirm('Stop <%= c.name %>? Calls in progress are dropped.')">
             <button class="btn btn-sm" type="submit">Stop</button></form>
           <a class="btn btn-sm" href="/campaigns/<%= c.id %>">Edit</a>
+          <a class="btn btn-sm" href="/campaigns/<%= c.id %>/report">Report</a>
           <form class="inline-form" method="post" action="/campaigns/<%= c.id %>/reset-stats"
                 onsubmit="return confirm('Reset the counters for <%= c.name %>?')">
             <button class="btn btn-sm" type="submit">Reset stats</button></form>
@@ -101,6 +102,22 @@
       <td class="mono" id="t-failed-<%= c.id %>">—</td>
     </tr></tbody></table>
     <div class="muted" style="font-size:11px;margin-top:8px" id="t-why-<%= c.id %>"></div>
+
+    <!-- Counters say how many calls are up; these say WHICH numbers, and how
+         the last few ended. That is what someone watching a running campaign
+         is actually looking for. -->
+    <div class="grid-2" style="margin-top:16px">
+      <div>
+        <div class="form-label">On the phone now</div>
+        <div id="now-<%= c.id %>" class="muted" style="font-size:12px">—</div>
+      </div>
+      <div>
+        <div class="form-label">Just finished
+          <a style="font-weight:400;font-size:11px;margin-left:6px"
+             href="/campaigns/<%= c.id %>/report">full report →</a></div>
+        <div id="recent-<%= c.id %>" class="muted" style="font-size:12px">—</div>
+      </div>
+    </div>
   </div>
 </div>
 <% }) %>
@@ -110,6 +127,9 @@ var CAMPAIGN_IDS = <%- JSON.stringify(campaigns.map(function(c){ return c.id; })
 var CEILINGS = <%- JSON.stringify(campaigns.reduce(function(m,c){ m[c.id]=c.pacing.maxConcurrent; return m; },{})) %>;
 
 function put(id, v){ var el=document.getElementById(id); if(el) el.textContent = v; }
+var STATE_WORDS={dialing:'dialling',ringing:'ringing',answered:'answered',
+  greeting:'playing prompt',playing:'playing prompt','awaiting-key':'waiting for a key',
+  key:'waiting for a key','ringing-agent':'ringing agent',bridged:'with an agent',done:'done'};
 
 function refreshCampaign(id){
   fetch('/api/campaigns/'+id+'/live',{credentials:'same-origin'})
@@ -150,6 +170,47 @@ function refreshCampaign(id){
       put('t-why-'+id, (s.failed && s.lastFailure)
         ? 'Last failure: '+s.lastFailure : '');
       put('note-'+id, d.note||'');
+
+      // Live numbers. Built as text nodes rather than innerHTML: a phone
+      // number is data from a lead file, and it is not going to be the thing
+      // that injects markup into this page.
+      var now=document.getElementById('now-'+id);
+      if(now){
+        now.textContent='';
+        var lc=d.liveCalls||[];
+        if(!lc.length) now.textContent='Nothing in flight.';
+        lc.slice(0,12).forEach(function(call){
+          var row=document.createElement('div');
+          row.style.cssText='display:flex;justify-content:space-between;padding:2px 0';
+          var a=document.createElement('span'); a.className='mono'; a.textContent=call.phone;
+          var b=document.createElement('span');
+          b.textContent=STATE_WORDS[call.state]||call.state;
+          b.textContent+=' · '+call.seconds+'s';
+          row.appendChild(a); row.appendChild(b); now.appendChild(row);
+        });
+        if(lc.length>12){
+          var more=document.createElement('div');
+          more.textContent='+'+(lc.length-12)+' more';
+          now.appendChild(more);
+        }
+      }
+
+      var rec=document.getElementById('recent-'+id);
+      if(rec){
+        rec.textContent='';
+        var rr=d.recent||[];
+        if(!rr.length) rec.textContent='No calls recorded yet.';
+        rr.slice(0,10).forEach(function(r){
+          var row=document.createElement('div');
+          row.style.cssText='display:flex;justify-content:space-between;padding:2px 0';
+          var a=document.createElement('span'); a.className='mono'; a.textContent=r.phone;
+          var b=document.createElement('span');
+          b.textContent=r.label||r.outcome;
+          if(r.outcome==='transferred') b.style.color='var(--ok,#2ecc71)';
+          else if(r.outcome==='failed'||r.outcome==='no-answer') b.style.color='var(--bad,#e74c3c)';
+          row.appendChild(a); row.appendChild(b); rec.appendChild(row);
+        });
+      }
     }).catch(function(){});
 }
 function loop(){ CAMPAIGN_IDS.forEach(refreshCampaign); setTimeout(loop, 2000); }

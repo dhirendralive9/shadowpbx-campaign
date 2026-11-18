@@ -1,0 +1,105 @@
+<%- include('head', { title: 'Report — ' + campaign.name, active: 'campaigns' }) %>
+<%- include('flash') %>
+
+<div class="section">
+  <div class="sec-head">
+    <div class="sec-title">Call report — <%= campaign.name %></div>
+    <div>
+      <a class="btn btn-sm" href="/campaigns/<%= campaign.id %>">Edit campaign</a>
+      <a class="btn btn-sm" href="/campaigns">All campaigns</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <!-- Dates are the whole filter. A campaign that ran for weeks must not
+         dump everything into the browser because someone clicked Report. -->
+    <form method="get" class="grid-4" style="align-items:end">
+      <div class="form-group"><label class="form-label">From</label>
+        <input class="form-input" type="date" name="from" value="<%= filter.from %>"></div>
+      <div class="form-group"><label class="form-label">To</label>
+        <input class="form-input" type="date" name="to" value="<%= filter.to %>"></div>
+      <div class="form-group"><label class="form-label">Outcome</label>
+        <select class="form-select" name="outcome">
+          <option value="">Everything</option>
+          <% Object.keys(outcomes).forEach(function(k){ %>
+            <option value="<%= k %>" <%= filter.outcome===k?'selected':'' %>><%= outcomes[k] %></option>
+          <% }); %>
+        </select></div>
+      <div class="form-group"><label class="form-label">Number contains</label>
+        <input class="form-input" name="phone" value="<%= filter.phone %>" placeholder="559463"></div>
+      <div class="form-group" style="grid-column:1/-1">
+        <button class="btn btn-primary">Apply</button>
+        <a class="btn" href="/campaigns/<%= campaign.id %>/report">Reset</a>
+        <a class="btn" style="float:right"
+           href="/campaigns/<%= campaign.id %>/report.csv?from=<%= filter.from %>&to=<%= filter.to %>&outcome=<%= filter.outcome %>&phone=<%= encodeURIComponent(filter.phone) %>">
+          Download CSV</a>
+        <span class="muted" style="font-size:11px;float:right;margin:8px 12px 0 0">
+          The CSV has every matching row, not just the ones shown.</span>
+      </div>
+    </form>
+  </div>
+
+  <% if (available.length) { %>
+    <div class="muted" style="font-size:11px;margin:-6px 0 14px">
+      Days with calls:
+      <% available.slice(0,14).forEach(function(d){ %>
+        <a href="/campaigns/<%= campaign.id %>/report?from=<%= d %>&to=<%= d %>"
+           style="margin-right:8px"><%= d %></a>
+      <% }); %>
+      <% if (available.length > 14) { %><span>+<%= available.length-14 %> older</span><% } %>
+    </div>
+  <% } %>
+
+  <div class="card">
+    <div class="grid-4" style="text-align:center">
+      <div><div style="font-size:26px"><strong><%= summary.total %></strong></div>
+        <div class="muted" style="font-size:11px">calls</div></div>
+      <div><div style="font-size:26px"><strong><%= summary.connected %></strong></div>
+        <div class="muted" style="font-size:11px">connected · <%= summary.connectRate %>%</div></div>
+      <div><div style="font-size:26px"><strong><%= summary.transferred %></strong></div>
+        <div class="muted" style="font-size:11px">transferred · <%= summary.transferRate %>%</div></div>
+      <div><div style="font-size:26px"><strong><%= Math.round(summary.talkSeconds/60) %></strong></div>
+        <div class="muted" style="font-size:11px">minutes talking</div></div>
+    </div>
+    <% if (summary.failed) { %>
+      <div class="muted" style="font-size:11px;margin-top:10px;text-align:center">
+        <%= summary.failed %> never connected — filter by “Failed to connect” to see why.</div>
+    <% } %>
+  </div>
+
+  <div class="card">
+    <% if (!rows.length) { %>
+      <div class="empty">No calls in this range.
+        <% if (!available.length) { %>
+          This campaign has not placed a call yet — records start from the first one it dials.
+        <% } %></div>
+    <% } else { %>
+    <% if (capped) { %>
+      <div class="muted" style="font-size:11px;margin-bottom:8px">
+        Showing the newest 2000. Narrow the dates, or download the CSV for the lot.</div>
+    <% } %>
+    <table class="tbl"><thead><tr>
+      <th>Time</th><th>Number</th><th>Outcome</th><th>Keys</th>
+      <th>Talk</th><th>Total</th><th>Try</th><th>Detail</th>
+    </tr></thead><tbody>
+    <% rows.forEach(function(r){
+         var good = r.outcome==='transferred';
+         var bad  = r.outcome==='failed' || r.outcome==='no-answer'; %>
+      <tr>
+        <td class="mono" style="white-space:nowrap"><%= new Date(r.at).toLocaleString() %></td>
+        <td class="mono"><%= r.phone %></td>
+        <td><span class="pill <%= good?'p-ok':(bad?'p-bad':'p-gray') %>"><%= r.outcomeLabel %></span></td>
+        <td class="mono"><%= r.digits || '—' %></td>
+        <td class="mono"><%= r.talkSeconds ? r.talkSeconds+'s' : '—' %></td>
+        <td class="mono"><%= r.totalSeconds %>s</td>
+        <td class="mono"><%= r.attempt %></td>
+        <td class="muted" style="font-size:11px;max-width:380px"><%= r.result %><%
+          if (r.hangupCause) { %> <span class="mono">(cause <%= r.hangupCause %>)</span><% } %></td>
+      </tr>
+    <% }); %>
+    </tbody></table>
+    <% } %>
+  </div>
+</div>
+
+<%- include('foot') %>

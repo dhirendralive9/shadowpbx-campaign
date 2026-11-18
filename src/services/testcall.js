@@ -189,6 +189,29 @@ async function onStasisStart(event, channel) {
       : 'Call ended before the audio finished playing.');
   });
 
+  if (job.mode === 'echo') {
+    // Hand the channel to the dialplan and get out of the way: Stasis has no
+    // echo of its own, and ARI cannot loop a channel's media back to itself.
+    // The job finishes here while the call carries on -- the person on the
+    // agent phone is the instrument now.
+    log(job, 'Answered — switching to echo', 'playing');
+    try {
+      await channel.continueInDialplan({ context: 'campaign-echo', extension: 's', priority: 1 });
+    } catch (e) {
+      handled = true;
+      return finish(job, false,
+        `Could not start the echo test: ${e.message}. Is the campaign-echo context in `
+        + '/etc/asterisk/extensions.conf? Copy asterisk/extensions.conf and run '
+        + '"asterisk -rx \'dialplan reload\'".');
+    }
+    handled = true;
+    return finish(job, true,
+      'Echo running on the agent phone. Speak into it: you should hear your own voice '
+      + 'come back after a short delay. If you hear yourself, audio flows both ways on '
+      + 'this route. If you hear nothing, audio is one-way — check RTP between the two '
+      + 'servers. Hang up when done.');
+  }
+
   if (job.mode === 'answer') {
     // The question a route test asks is "did this reach someone", so the answer
     // event already settles it. Play the audio anyway: whoever picked up should
@@ -279,7 +302,8 @@ function start(opts) {
     e164: opts.e164 !== false,
     // 'dtmf'  — prove trunk + audio + a keypress coming back (outbound trunks)
     // 'answer'— prove the call reaches a human through the PBX inbound route
-    mode: opts.mode === 'answer' ? 'answer' : 'dtmf',
+    // 'echo'   — prove audio flows BOTH ways on that route
+    mode: ['answer', 'echo'].includes(opts.mode) ? opts.mode : 'dtmf',
     label: opts.label || '',
     callerId: opts.callerId || '',
     confirmKey: opts.confirmKey || '1',

@@ -78,11 +78,19 @@
   <div class="card">
     <div class="muted" style="font-size:12px;margin-bottom:12px">
       Dials this module's own route number on the PBX, so it exercises the SIP leg, the inbound
-      route you added there, and the queue behind it. An agent's phone should ring — answer it and
-      you will hear the test audio. That is the same path a confirmed press-1 takes.
+      route you added there, and the queue behind it. An agent's phone should ring — that is the
+      same path a confirmed press-1 takes.
+      <br><strong>Play audio</strong> proves sound reaches the agent.
+      <strong>Echo</strong> proves it comes back too: speak into the agent phone and you should hear
+      yourself. One-way audio is the usual failure after a transfer, and only echo catches it.
     </div>
     <input type="hidden" id="rt-server">
     <div class="grid-3">
+      <div class="form-group"><label class="form-label">What to test</label>
+        <select class="form-select" id="rt-mode">
+          <option value="answer">Play audio — proves the call reaches an agent</option>
+          <option value="echo">Echo — proves audio flows both ways</option>
+        </select></div>
       <div class="form-group"><label class="form-label">Audio to play</label>
         <select class="form-select" id="rt-sound">
           <% (typeof sounds !== 'undefined' ? sounds : []).forEach(function(f){ %>
@@ -247,7 +255,8 @@ function runRouteTest(){
     '<div class="alert alert-warn">Dialling the route on the PBX…</div>';
   api('/api/servers/'+id+'/test-call',
       {method:'POST',headers:{'Content-Type':'application/json'},
-       body:JSON.stringify({sound:document.getElementById('rt-sound').value})})
+       body:JSON.stringify({sound:document.getElementById('rt-sound').value,
+                            mode:document.getElementById('rt-mode').value})})
    .then(function(d){
      if(!d.ok) return rtFail(d.error||'The server refused the test call.');
      pollRoute(d.jobId,0,Date.now());

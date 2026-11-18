@@ -389,12 +389,14 @@ app.post('/api/servers/:id/test-call', auth, (req, res) => {
     return res.status(400).json({ ok: false, error: 'This server has no route number — save it again.' });
   }
   const sound = String(req.body.sound || '').trim() || s.ivr.greeting || 'campaign/test';
+  // 'echo' proves audio in both directions; 'answer' only proves it arrives.
+  const mode = req.body.mode === 'echo' ? 'echo' : 'answer';
   try {
     const job = testcall.start({
       number: sv.routeNumber,
       endpoint: `PJSIP/server-${sv.id}`,
       e164: false,
-      mode: 'answer',
+      mode,
       label: `${sv.name} → ${sv.routeNumber}`,
       sound,
       maxGreetings: 1,

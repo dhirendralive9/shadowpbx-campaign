@@ -242,7 +242,9 @@ function activeEndpoints(s) {
   return {
     trunk: t ? `PJSIP/trunk-${t.id}` : null,
     server: sv ? `PJSIP/server-${sv.id}` : null,
-    agentExten: sv ? sv.agentExten : null,
+    // Transfers go to the module's own route number, which the PBX maps to a
+    // ring group or queue. There is no single agent extension to dial.
+    routeNumber: sv ? sv.routeNumber : null,
     callerId: t ? t.callerId : '',
   };
 }

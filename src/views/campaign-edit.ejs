@@ -40,7 +40,7 @@
         <select class="form-select" name="serverId" required>
           <option value="">Select…</option>
           <% (settings.servers||[]).forEach(function(s){ %>
-            <option value="<%= s.id %>" <%= sel(s.id, c.serverId) %>><%= s.name %> — ext <%= s.agentExten %></option>
+            <option value="<%= s.id %>" <%= sel(s.id, c.serverId) %>><%= s.name %><%= s.routeNumber ? ' — route ' + s.routeNumber : '' %></option>
           <% }) %>
         </select></div>
     </div>

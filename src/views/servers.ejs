@@ -2,23 +2,24 @@
 <%- include('flash') %>
 <div class="section">
   <div class="sec-head"><div class="sec-title">PBX Servers</div>
-    <span class="muted" style="font-size:11px">Where confirmed leads are transferred</span></div>
+    <span class="muted" style="font-size:11px">Where confirmed leads are handed off — the queue picks the agent</span></div>
   <div class="card">
     <% if (!settings.servers.length) { %>
       <div class="empty">No servers yet. Add your main ShadowPBX below.</div>
     <% } else { %>
     <table class="tbl"><thead><tr>
-      <th>Name</th><th>Host</th><th>Agent ext.</th><th>API</th><th>Reachable</th><th></th>
+      <th>Name</th><th>SIP host</th><th>Route number</th><th>Agents</th><th>Reachable</th><th></th>
     </tr></thead><tbody>
     <% settings.servers.forEach(function(sv){ var on = sv.id === settings.activeServerId; %>
       <tr>
         <td><strong><%= sv.name %></strong> <% if (on) { %><span class="pill p-ok">active</span><% } %></td>
         <td class="mono"><%= sv.host %>:<%= sv.port %></td>
-        <td class="mono"><%= sv.agentExten %></td>
-        <td><% if (sv.apiUrl) { %><span class="pill p-info">set</span><% } else { %><span class="muted">—</span><% } %></td>
+        <td class="mono"><%= sv.routeNumber || '—' %></td>
+        <td><span class="pill p-gray" data-agents="<%= sv.id %>">…</span></td>
         <td><span class="pill p-gray" data-ep="server-<%= sv.id %>">—</span></td>
         <td style="text-align:right;white-space:nowrap">
           <button class="btn btn-sm" onclick="editServer('<%= sv.id %>')">Edit</button>
+          <button class="btn btn-sm" onclick="openRouteTest('<%= sv.id %>','<%= sv.name %>')">Test call</button>
           <% if (!on) { %>
             <form class="inline-form" method="post" action="/servers/<%= sv.id %>/activate">
               <button class="btn btn-sm" type="submit">Use this</button></form>
@@ -34,6 +35,64 @@
   </div>
 </div>
 
+<% var act = settings.servers.find(function(x){ return x.id === settings.activeServerId; }); %>
+<% if (act) { %>
+<div class="section">
+  <div class="sec-head"><div class="sec-title">Hand-off route — <%= act.name %></div></div>
+  <div class="card">
+    <div class="grid-3">
+      <div class="form-group">
+        <label class="form-label">Inbound route number</label>
+        <input class="form-input mono" id="route-num" value="<%= act.routeNumber %>" readonly
+               style="font-size:18px;letter-spacing:1px">
+        <span class="muted" style="font-size:11px">
+          Add this on <%= act.name %> under <span class="mono">/routes</span> as an inbound route,
+          pointing at the ring group or queue for this campaign.</span>
+      </div>
+      <div class="form-group">
+        <label class="form-label">&nbsp;</label>
+        <button class="btn" type="button" onclick="copyRoute()">Copy number</button>
+        <form class="inline-form" method="post" action="/servers/<%= act.id %>/regenerate-route"
+              onsubmit="return confirm('Generate a new route number?\n\nCalls stop reaching agents until you repoint the inbound route on the PBX.')">
+          <button class="btn btn-sm" type="submit">Regenerate</button></form>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Agents on the queue</label>
+        <div class="kpi-val" id="ag-count" style="font-size:26px">—</div>
+        <span class="muted" style="font-size:11px" id="ag-detail">connecting…</span>
+      </div>
+    </div>
+    <div id="ag-err"></div>
+  </div>
+</div>
+<% } %>
+
+<div class="section" id="rt-section" style="display:none">
+  <div class="sec-head"><div class="sec-title" id="rt-title">Test call</div>
+    <button class="btn btn-sm" type="button"
+            onclick="document.getElementById('rt-section').style.display='none'">Close</button></div>
+  <div class="card">
+    <div class="muted" style="font-size:12px;margin-bottom:12px">
+      Dials this module's own route number on the PBX, so it exercises the SIP leg, the inbound
+      route you added there, and the queue behind it. An agent's phone should ring — answer it and
+      you will hear the test audio. That is the same path a confirmed press-1 takes.
+    </div>
+    <input type="hidden" id="rt-server">
+    <div class="grid-3">
+      <div class="form-group"><label class="form-label">Audio to play</label>
+        <select class="form-select" id="rt-sound">
+          <% (typeof sounds !== 'undefined' ? sounds : []).forEach(function(f){ %>
+            <option value="<%= f.soundId %>"><%= f.name %> (<%= f.seconds %>s)</option>
+          <% }) %>
+        </select></div>
+    </div>
+    <button class="btn btn-primary" type="button" id="rt-go" onclick="runRouteTest()">Place test call</button>
+    <span class="muted" style="font-size:11px;margin-left:8px">An agent phone on the queue should ring.</span>
+    <div id="rt-result" style="margin-top:12px"></div>
+    <pre class="out-pre" id="rt-timeline" style="display:none"></pre>
+  </div>
+</div>
+
 <div class="section">
   <div class="sec-head"><div class="sec-title" id="form-title">Add a server</div></div>
   <div class="card">
@@ -42,16 +101,21 @@
       <div class="grid-3">
         <div class="form-group"><label class="form-label">Name</label>
           <input class="form-input" name="name" id="s-name" placeholder="Main ShadowPBX" required></div>
-        <div class="form-group"><label class="form-label">Host / IP</label>
+        <div class="form-group"><label class="form-label">SIP host / IP</label>
           <input class="form-input" name="host" id="s-host" placeholder="89.117.51.116" required></div>
         <div class="form-group"><label class="form-label">SIP port</label>
           <input class="form-input" name="port" id="s-port" type="number" value="5060"></div>
-        <div class="form-group"><label class="form-label">Agent extension</label>
-          <input class="form-input" name="agentExten" id="s-ext" placeholder="2000" required></div>
-        <div class="form-group"><label class="form-label">Agent API URL <span class="muted">(optional)</span></label>
-          <input class="form-input" name="apiUrl" id="s-api" placeholder="https://pbx/api/campaign"></div>
+        <div class="form-group"><label class="form-label">Agent API URL</label>
+          <input class="form-input" name="apiUrl" id="s-api" required
+                 placeholder="https://pbx.example/api/campaign/queues/sales">
+          <span class="muted" style="font-size:11px">The URL ShadowPBX gives you for a ring group or
+            queue. It reports who is on it and who is free.</span></div>
         <div class="form-group"><label class="form-label">API key</label>
           <input class="form-input" name="apiKey" id="s-key" type="password" placeholder="not set"></div>
+      </div>
+      <div class="muted" style="font-size:11px;margin-bottom:16px">
+        No agent extension here on purpose: the queue decides who takes the call. Saving generates a
+        12-digit route number to add as an inbound route on the PBX.
       </div>
       <button class="btn btn-primary" type="submit">Save server</button>
       <button class="btn" type="button" onclick="resetServer()">Cancel</button>
@@ -61,15 +125,16 @@
 
 <script>
 var SERVERS = <%- JSON.stringify(settings.servers.map(function(s){
-  return {id:s.id,name:s.name,host:s.host,port:s.port,agentExten:s.agentExten,apiUrl:s.apiUrl}; })) %>;
+  return {id:s.id,name:s.name,host:s.host,port:s.port,apiUrl:s.apiUrl,routeNumber:s.routeNumber}; })) %>;
+var ACTIVE_SERVER_ID = <%- JSON.stringify(settings.activeServerId || '') %>;
 var s_id=document.getElementById('s-id'),s_name=document.getElementById('s-name'),
  s_host=document.getElementById('s-host'),s_port=document.getElementById('s-port'),
- s_ext=document.getElementById('s-ext'),s_api=document.getElementById('s-api'),
- s_key=document.getElementById('s-key');
+ s_api=document.getElementById('s-api'),s_key=document.getElementById('s-key');
+
 function editServer(id){
   var s=SERVERS.find(function(x){return x.id===id;}); if(!s) return;
   s_id.value=s.id; s_name.value=s.name||''; s_host.value=s.host||''; s_port.value=s.port||5060;
-  s_ext.value=s.agentExten||''; s_api.value=s.apiUrl||'';
+  s_api.value=s.apiUrl||'';
   s_key.placeholder='•••••••• (unchanged)'; s_key.value='';
   document.getElementById('form-title').textContent='Edit server — '+(s.name||'');
   document.getElementById('server-form').scrollIntoView({behavior:'smooth'});
@@ -79,8 +144,61 @@ function resetServer(){
   s_key.placeholder='not set';
   document.getElementById('form-title').textContent='Add a server';
 }
+function copyRoute(){
+  var el=document.getElementById('route-num'); el.select();
+  try{ document.execCommand('copy'); }catch(e){}
+  el.blur();
+}
+
+function api(url,opts){
+  var ctl=new AbortController(); var t=setTimeout(function(){ctl.abort();},15000);
+  opts=opts||{}; opts.signal=ctl.signal; opts.credentials='same-origin';
+  return fetch(url,opts).then(function(r){
+    clearTimeout(t);
+    if(!/json/.test(r.headers.get('content-type')||'')){
+      throw new Error('server answered '+r.status+(r.redirected?' after redirecting to login (session expired)':''));
+    }
+    return r.json();
+  }).catch(function(e){
+    clearTimeout(t);
+    throw (e&&e.name==='AbortError')?new Error('no response from the server within 15s'):e;
+  });
+}
+
+// ---- live agent availability -------------------------------------------
+function describe(a){
+  if(!a.fresh) return a.error || (a.reason||'no data yet');
+  return a.available+' free of '+a.total+(a.group?' · '+a.group:'')
+       + ' · '+(a.transport==='ws'?'live':'polling');
+}
+function pollAgents(){
+  SERVERS.forEach(function(sv){
+    api('/api/servers/'+sv.id+'/agents').then(function(a){
+      if(!a.ok) return;
+      var pill=document.querySelector('[data-agents="'+sv.id+'"]');
+      if(pill){
+        pill.textContent = a.fresh ? (a.available+'/'+a.total) : '—';
+        pill.className = 'pill '+(!a.fresh ? 'p-err' : (a.available>0?'p-ok':'p-gray'));
+      }
+      if(sv.id===ACTIVE_SERVER_ID){
+        var c=document.getElementById('ag-count'); if(!c) return;
+        c.textContent = a.fresh ? a.available : '—';
+        document.getElementById('ag-detail').textContent = describe(a);
+        document.getElementById('ag-err').innerHTML =
+          (!a.fresh && a.error)
+            ? '<div class="alert alert-err" style="margin-top:10px">'+a.error+
+              (a.wsSupported?'':' · live updates need the ws package — run npm install')+'</div>'
+            : '';
+      }
+    }).catch(function(){});
+  });
+  setTimeout(pollAgents,5000);
+}
+pollAgents();
+
+// ---- endpoint reachability ---------------------------------------------
 (function poll(){
-  fetch('/api/status').then(r=>r.json()).then(function(d){
+  fetch('/api/status').then(function(r){return r.json();}).then(function(d){
     if(!d.ok) return;
     (d.status.endpoints||[]).forEach(function(e){
       var el=document.querySelector('[data-ep="'+e.name+'"]');
@@ -90,5 +208,60 @@ function resetServer(){
   }).catch(function(){});
   setTimeout(poll,5000);
 })();
+
+// ---- route test call ----------------------------------------------------
+var rtPoll=null;
+function openRouteTest(id,name){
+  if(rtPoll){clearTimeout(rtPoll);rtPoll=null;}
+  var sec=document.getElementById('rt-section');
+  sec.style.display='';
+  document.getElementById('rt-title').textContent='Test call — '+name;
+  document.getElementById('rt-server').value=id;
+  document.getElementById('rt-result').innerHTML='';
+  document.getElementById('rt-timeline').style.display='none';
+  sec.scrollIntoView({behavior:'smooth'});
+}
+function rtFail(msg){
+  var b=document.getElementById('rt-go');
+  b.disabled=false; b.textContent='Place test call';
+  document.getElementById('rt-result').innerHTML='<div class="alert alert-err">'+msg+'</div>';
+}
+function runRouteTest(){
+  if(rtPoll){clearTimeout(rtPoll);rtPoll=null;}
+  var id=document.getElementById('rt-server').value;
+  var b=document.getElementById('rt-go');
+  b.disabled=true; b.textContent='Calling…';
+  document.getElementById('rt-result').innerHTML=
+    '<div class="alert alert-warn">Dialling the route on the PBX…</div>';
+  api('/api/servers/'+id+'/test-call',
+      {method:'POST',headers:{'Content-Type':'application/json'},
+       body:JSON.stringify({sound:document.getElementById('rt-sound').value})})
+   .then(function(d){
+     if(!d.ok) return rtFail(d.error||'The server refused the test call.');
+     pollRoute(d.jobId,0,Date.now());
+   }).catch(function(e){ rtFail('Could not start the test: '+e.message); });
+}
+function pollRoute(jobId,fails,t0){
+  var b=document.getElementById('rt-go'), box=document.getElementById('rt-result'),
+      tl=document.getElementById('rt-timeline');
+  api('/api/test-call/'+jobId).then(function(d){
+    if(!d.ok) return rtFail(d.error||'The test was lost on the server.');
+    tl.style.display='';
+    tl.textContent=(d.events||[]).map(function(e){
+      return '+'+(e.at/1000).toFixed(1)+'s  '+e.text; }).join('\n');
+    tl.scrollTop=tl.scrollHeight;
+    if(d.finished){
+      b.disabled=false; b.textContent='Place test call';
+      box.innerHTML='<div class="alert '+(d.passed?'alert-ok':'alert-err')+'">'+d.result+'</div>';
+      rtPoll=null; return;
+    }
+    if(Date.now()-t0>180000) return rtFail('Gave up waiting after 3 minutes (last state: '+d.state+').');
+    box.innerHTML='<div class="alert alert-warn">'+d.state+'…</div>';
+    rtPoll=setTimeout(function(){pollRoute(jobId,0,t0);},1000);
+  }).catch(function(e){
+    if(fails>=3) return rtFail('Lost contact with the server while waiting: '+e.message);
+    rtPoll=setTimeout(function(){pollRoute(jobId,fails+1,t0);},1500);
+  });
+}
 </script>
 <%- include('foot') %>

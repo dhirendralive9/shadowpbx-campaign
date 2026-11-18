@@ -57,8 +57,8 @@ function migrate(raw) {
     const s = {
       id: newId(), name: 'Main ShadowPBX',
       host: raw.pbx.host, port: raw.pbx.port || 5060,
-      agentExten: raw.pbx.agentExten || '2000',
       apiUrl: raw.pbx.apiUrl || '', apiKey: raw.pbx.apiKey || '',
+      routeNumber: newRouteNumber([]),
     };
     out.servers.push(s);
     out.activeServerId = s.id;
@@ -140,25 +140,57 @@ function setActiveTrunk(id) {
 }
 
 // ---------------------------------------------------------------- servers
+/**
+ * A 12-digit number this module owns and the PBX routes.
+ *
+ * Confirmed press-1 calls are sent here; on the PBX it is an inbound route
+ * pointing at the ring group or queue, which then picks the agent. Generated
+ * rather than typed so two campaign servers can never share one, and so the
+ * number means nothing to anyone who dials it by accident.
+ */
+function newRouteNumber(servers) {
+  const taken = new Set((servers || []).map((x) => x.routeNumber).filter(Boolean));
+  for (let i = 0; i < 50; i++) {
+    // Leading digit 1-9: some dialplans treat a leading 0 as a prefix.
+    const n = String(crypto.randomInt(1, 10))
+      + String(crypto.randomInt(0, 1e11)).padStart(11, '0');
+    if (!taken.has(n)) return n;
+  }
+  return String(Date.now()).slice(-12);
+}
+
 function saveServer(data) {
   const s = load();
   const clean = {
     name: (data.name || '').trim() || 'Unnamed server',
     host: (data.host || '').trim(),
     port: parseInt(data.port, 10) || 5060,
-    agentExten: (data.agentExten || '').trim(),
+    // Agents come from the ring group or queue behind apiUrl, so there is no
+    // single extension to dial any more.
     apiUrl: (data.apiUrl || '').trim(),
   };
   const existing = data.id ? s.servers.find((x) => x.id === data.id) : null;
   if (existing) {
     if ((data.apiKey || '').trim()) clean.apiKey = data.apiKey.trim();
     Object.assign(existing, clean);
+    // Keep the route number across edits: it is already configured on the PBX.
+    if (!existing.routeNumber) existing.routeNumber = newRouteNumber(s.servers);
   } else {
     clean.id = newId();
     clean.apiKey = (data.apiKey || '').trim();
+    clean.routeNumber = newRouteNumber(s.servers);
     s.servers.push(clean);
     if (!s.activeServerId) s.activeServerId = clean.id;
   }
+  return persist(s);
+}
+
+/** Mint a fresh route number — only when the PBX side is being rebuilt. */
+function regenerateRoute(id) {
+  const s = load();
+  const sv = s.servers.find((x) => x.id === id);
+  if (!sv) return s;
+  sv.routeNumber = newRouteNumber(s.servers.filter((x) => x.id !== id));
   return persist(s);
 }
 
@@ -208,7 +240,9 @@ function validate(s) {
   if (!sv) missing.push('an active server');
   else {
     if (!sv.host) missing.push('server host');
-    if (!sv.agentExten) missing.push('agent extension');
+    // Without the agent API there is no way to know how many agents are free,
+    // and a campaign that cannot see that is a campaign that abandons calls.
+    if (!sv.apiUrl) missing.push('server agent API URL');
   }
   return missing;
 }
@@ -216,6 +250,6 @@ function validate(s) {
 module.exports = {
   load, persist, validate, activeTrunk, activeServer,
   saveTrunk, deleteTrunk, setActiveTrunk,
-  saveServer, deleteServer, setActiveServer,
+  saveServer, deleteServer, setActiveServer, regenerateRoute,
   saveIvr, DEFAULTS, FILE, newId,
 };

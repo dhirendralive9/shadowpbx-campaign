@@ -63,6 +63,14 @@ and on `1` bridges you to extension 2000 on ShadowPBX. It prints a single
 - [ ] Web UI
 - [ ] AMD (answering-machine detection) via Asterisk `AMD()`
 
+## Agent availability and hand-off
+
+The Servers tab takes an API URL from ShadowPBX pointing at a ring group or
+queue, and generates a 12-digit inbound route number to add on that PBX. The
+module reads free-agent counts over WebSocket (REST fallback) to pace dialling,
+and sends confirmed press-1 calls to the route number for the queue to
+distribute. Contract: [docs/pbx-agent-api.md](docs/pbx-agent-api.md).
+
 ## Running it
 
 Day-to-day commands — services, logs, health checks, test calls — and the

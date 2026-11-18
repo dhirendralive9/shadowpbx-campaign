@@ -36,10 +36,13 @@ const jobs = new Map();
  * -- the one `channel originate` was proven with against this carrier, E.164 with
  * a leading +.
  */
-function dialString(endpoint, number) {
+function dialString(endpoint, number, e164 = true) {
   const n = String(number).replace(/[^\d]/g, '');
   const m = /^PJSIP\/(.+)$/.exec(endpoint);
-  return m ? `PJSIP/+${n}@${m[1]}` : `${endpoint}/${n}`;
+  if (!m) return `${endpoint}/${n}`;
+  // A PSTN number needs E.164; an internal route number on the PBX must go out
+  // exactly as dialled, because `+123456789012` matches no inbound route.
+  return `PJSIP/${e164 ? '+' : ''}${n}@${m[1]}`;
 }
 const newId = () => crypto.randomBytes(5).toString('hex');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -186,6 +189,32 @@ async function onStasisStart(event, channel) {
       : 'Call ended before the audio finished playing.');
   });
 
+  if (job.mode === 'answer') {
+    // The question a route test asks is "did this reach someone", so the answer
+    // event already settles it. Play the audio anyway: whoever picked up should
+    // hear why their phone rang, rather than silence.
+    log(job, `Playing ${job.sound} for whoever answered`, 'playing');
+    try {
+      const pb = await channel.play({ media: `sound:${job.sound}` });
+      await new Promise((resolve) => {
+        let settled = false;
+        const done = () => { if (!settled) { settled = true; resolve(); } };
+        pb.once('PlaybackFinished', done);
+        setTimeout(done, 30000);
+      });
+      job.heardAudio = true;
+    } catch (e) {
+      log(job, `Playback failed: ${e.message}`);
+    }
+    handled = true;
+    finish(job, true, `Answered${job.label ? ` via ${job.label}` : ''}. `
+      + 'The PBX accepted the call on this route and someone picked it up — '
+      + 'press-1 transfers will land the same way.');
+    await sleep(200);
+    try { await channel.hangup(); } catch (e) {}
+    return;
+  }
+
   // ---- greeting rounds: play, listen, replay, give up ----
   for (let round = 1; round <= job.maxGreetings && !handled && !job.finished; round++) {
     log(job, `Playing ${job.sound} (round ${round}/${job.maxGreetings})`, 'playing');
@@ -246,6 +275,12 @@ function start(opts) {
     trunkName: opts.trunkName,
     endpoint: opts.endpoint,
     sound: opts.sound,
+    // Trunk tests dial the PSTN; route tests dial a number the PBX owns.
+    e164: opts.e164 !== false,
+    // 'dtmf'  — prove trunk + audio + a keypress coming back (outbound trunks)
+    // 'answer'— prove the call reaches a human through the PBX inbound route
+    mode: opts.mode === 'answer' ? 'answer' : 'dtmf',
+    label: opts.label || '',
     callerId: opts.callerId || '',
     confirmKey: opts.confirmKey || '1',
     optOutKey: opts.optOutKey || '2',
@@ -274,7 +309,7 @@ async function run(job) {
     return finish(job, false, e.message);
   }
 
-  log(job, `Dialling ${dialString(job.endpoint, job.number)}`, 'dialing');
+  log(job, `Dialling ${dialString(job.endpoint, job.number, job.e164)}`, 'dialing');
 
   const chan = client.Channel();
   chan.on('ChannelStateChange', (evt, c) => {
@@ -293,7 +328,7 @@ async function run(job) {
 
   try {
     await chan.originate({
-      endpoint: dialString(job.endpoint, job.number),
+      endpoint: dialString(job.endpoint, job.number, job.e164),
       app: ARI_APP,
       appArgs: `test,${job.id}`,
       callerId: job.callerId || undefined,

@@ -18,6 +18,7 @@ const audio = require('./services/audio');
 const leads = require('./services/leads');
 const campaigns = require('./services/campaigns');
 const testcall = require('./services/testcall');
+const agents = require('./services/agents');
 
 // swagger-client (inside ari-client) throws from a callback when ARI cannot be
 // read, which no promise can catch. Losing the whole UI -- and every login
@@ -97,7 +98,7 @@ app.get('/trunks', auth, (req, res) =>
   res.render('trunks', base(req, { active: 'trunks', sub: 'trunks', sounds: audio.list() })));
 
 app.get('/servers', auth, (req, res) =>
-  res.render('servers', base(req, { active: 'servers', sub: 'servers' })));
+  res.render('servers', base(req, { active: 'servers', sub: 'servers', sounds: audio.list() })));
 
 app.get('/audio', auth, async (req, res) =>
   res.render('audio', base(req, {
@@ -238,16 +239,37 @@ app.post('/trunks/:id/delete', auth, async (req, res) => {
 // ---------------------------------------------------------------- servers
 app.post('/servers/save', auth, async (req, res) => {
   const s = store.saveServer(req.body);
+  agents.sync(s);
   const r = await asterisk.applySettings(s);
-  res.redirect(back('/servers', r.ok ? { ok: true, message: 'Server saved. PJSIP reloaded.' } : r));
+  if (!r.ok) return res.redirect(back('/servers', r));
+  const sv = (s.servers || []).find((x) => x.name === (req.body.name || '').trim())
+    || (s.servers || [])[s.servers.length - 1];
+  res.redirect(back('/servers', {
+    ok: true,
+    message: `Server saved. Add ${sv && sv.routeNumber} as an inbound route on `
+      + 'this PBX, pointing at the ring group or queue that serves this campaign.',
+  }));
+});
+
+app.post('/servers/:id/regenerate-route', auth, async (req, res) => {
+  const s = store.regenerateRoute(req.params.id);
+  const sv = (s.servers || []).find((x) => x.id === req.params.id);
+  await asterisk.applySettings(s);
+  res.redirect(back('/servers', {
+    ok: true,
+    message: `New route number ${sv && sv.routeNumber}. The old one stops working `
+      + 'as soon as you repoint the inbound route on the PBX.',
+  }));
 });
 app.post('/servers/:id/activate', auth, async (req, res) => {
   const s = store.setActiveServer(req.params.id);
+  agents.sync(s);
   await asterisk.applySettings(s);
   res.redirect('/servers?msg=' + encodeURIComponent('Active server switched.'));
 });
 app.post('/servers/:id/delete', auth, async (req, res) => {
   const s = store.deleteServer(req.params.id);
+  agents.sync(s);
   await asterisk.applySettings(s);
   res.redirect('/servers?msg=' + encodeURIComponent('Server deleted.'));
 });
@@ -344,6 +366,46 @@ app.post('/api/trunks/:id/test-call', auth, (req, res) => {
   }
 });
 
+/** Live agent availability for one server — what pacing will read. */
+app.get('/api/servers/:id/agents', auth, (req, res) => {
+  const s = store.load();
+  const sv = (s.servers || []).find((x) => x.id === req.params.id);
+  if (!sv) return res.status(404).json({ ok: false, error: 'No such server' });
+  res.json({ ok: true, routeNumber: sv.routeNumber || '', ...agents.status(sv.id) });
+});
+
+/**
+ * Prove the hand-off path, the mirror of the per-trunk test.
+ *
+ * Dials this module's own route number at the PBX, which means it exercises the
+ * SIP leg, the inbound route you added there, and the queue behind it. If an
+ * agent's phone rings, a confirmed press-1 will reach them the same way.
+ */
+app.post('/api/servers/:id/test-call', auth, (req, res) => {
+  const s = store.load();
+  const sv = (s.servers || []).find((x) => x.id === req.params.id);
+  if (!sv) return res.status(404).json({ ok: false, error: 'No such server' });
+  if (!sv.routeNumber) {
+    return res.status(400).json({ ok: false, error: 'This server has no route number — save it again.' });
+  }
+  const sound = String(req.body.sound || '').trim() || s.ivr.greeting || 'campaign/test';
+  try {
+    const job = testcall.start({
+      number: sv.routeNumber,
+      endpoint: `PJSIP/server-${sv.id}`,
+      e164: false,
+      mode: 'answer',
+      label: `${sv.name} → ${sv.routeNumber}`,
+      sound,
+      maxGreetings: 1,
+      waitSeconds: 5,
+    });
+    res.json({ ok: true, jobId: job.id });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 app.get('/api/test-call/:jobId', auth, (req, res) => {
   const job = testcall.get(req.params.jobId);
   if (!job) return res.status(404).json({ ok: false, error: 'Unknown or expired test' });
@@ -365,7 +427,7 @@ app.post('/api/test-call', auth, (req, res) => {
   const env = {
     ...process.env,
     TRUNK_ENDPOINT: ep.trunk, PBX_ENDPOINT: ep.server,
-    AGENT_EXTEN: ep.agentExten, CALLER_ID: ep.callerId || process.env.CALLER_ID || '',
+    AGENT_EXTEN: ep.routeNumber, CALLER_ID: ep.callerId || process.env.CALLER_ID || '',
     GREETING: `sound:${s.ivr.greeting}`,
     CONFIRM_KEY: s.ivr.confirmKey, OPTOUT_KEY: s.ivr.optOutKey,
     MAX_GREETINGS: String(s.ivr.maxGreetings), WAIT_SECONDS: String(s.ivr.waitSeconds),
@@ -380,6 +442,10 @@ app.post('/api/test-call', auth, (req, res) => {
 });
 
 if (audio.seedBundled()) console.log('Installed the bundled test tone as campaign/test.');
+
+// Start watching agent availability straight away: the dialler reads it, and a
+// socket that only connects on first use connects during the first campaign.
+agents.sync(store.load());
 
 app.listen(PORT, () => {
   console.log(`ShadowPBX Campaign UI on http://0.0.0.0:${PORT}  (login: ${ARI_USER})`);

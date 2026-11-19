@@ -140,6 +140,60 @@ function read(campaignId, opts = {}) {
   return rows;
 }
 
+/**
+ * Read roughly the last `want` lines of a file without reading the file.
+ *
+ * Seeks to the end and takes a window back from there. The first line in the
+ * window is almost certainly cut in half by the offset, so it is dropped
+ * unless the window happens to start at byte zero.
+ */
+function tailLines(file, want) {
+  if (want <= 0) return [];
+  let fd;
+  try { fd = fs.openSync(file, 'r'); } catch (e) { return []; }
+  try {
+    const size = fs.fstatSync(fd).size;
+    if (!size) return [];
+    // A record is a few hundred bytes; 1 KiB each is generous.
+    const span = Math.min(size, Math.max(64 * 1024, want * 1024));
+    const buf = Buffer.alloc(span);
+    fs.readSync(fd, buf, 0, span, size - span);
+    let txt = buf.toString('utf8');
+    if (span < size) txt = txt.slice(txt.indexOf('\n') + 1);
+    return txt.split('\n').filter((l) => l.trim());
+  } catch (e) {
+    return [];
+  } finally { try { fs.closeSync(fd); } catch (e) {} }
+}
+
+/**
+ * The newest N records, cheaply.
+ *
+ * `read()` with a limit still parses every day the campaign has, sorts the
+ * lot and throws nearly all of it away. The dashboard polls for this every
+ * two seconds, so that cost lands on the server continuously and grows for
+ * the whole life of the campaign -- a campaign a few thousand calls in will
+ * re-parse every one of them, thirty times a minute, to show fifteen rows.
+ *
+ * This walks days newest-first, reads only the tail of each file, and stops
+ * as soon as it has enough.
+ */
+function recent(campaignId, n = 15) {
+  const out = [];
+  for (const day of days(campaignId)) {            // already newest-first
+    const lines = tailLines(fileFor(campaignId, day), n - out.length);
+    for (let i = lines.length - 1; i >= 0 && out.length < n; i--) {
+      try { out.push(JSON.parse(lines[i])); } catch (e) {}
+    }
+    if (out.length >= n) break;
+  }
+  // File order is append order, which is chronological -- but at campaign
+  // concurrency a dozen calls finish within the same second, so sort rather
+  // than trusting the order they happened to be written in. Fifteen items.
+  out.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+  return out;
+}
+
 /** Counts for the header of a report. */
 function summary(rows) {
   const s = {
@@ -193,6 +247,6 @@ function removeAll(campaignId) {
 }
 
 module.exports = {
-  DIR, OUTCOMES, outcomeLabel, record, days, read, readDay,
+  DIR, OUTCOMES, outcomeLabel, record, days, read, readDay, recent,
   summary, toCsv, removeAll, dayOf, todayStr,
 };

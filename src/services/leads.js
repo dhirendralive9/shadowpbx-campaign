@@ -51,14 +51,52 @@ function writeIndex(list) {
 }
 
 const rowsPath = (id) => path.join(DIR, `${id}.json`);
+/**
+ * Rows, cached in memory.
+ *
+ * A running campaign asks for this list constantly: the dialler ticks every
+ * two seconds, the dashboard polls `remaining()` just as often, and every
+ * completed call looks up its own row more than once. Parsing a few thousand
+ * rows of JSON each time turns a quiet campaign into a busy CPU, and it gets
+ * worse exactly as the list gets bigger.
+ *
+ * The cache is invalidated by the file's own mtime and size, so anything that
+ * edits the file behind this process -- a restore, another tool, a hand edit
+ * -- is still picked up rather than being masked until a restart.
+ */
+const rowCache = new Map();                        // id -> { key, rows }
+
 function readRows(id) {
-  try { return JSON.parse(fs.readFileSync(rowsPath(id), 'utf8')); } catch (e) { return []; }
+  const file = rowsPath(id);
+  let key;
+  try {
+    const st = fs.statSync(file);
+    key = `${st.mtimeMs}:${st.size}`;
+  } catch (e) {
+    rowCache.delete(id);
+    return [];
+  }
+  const hit = rowCache.get(id);
+  if (hit && hit.key === key) return hit.rows;
+  let rows;
+  try { rows = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { return []; }
+  if (!Array.isArray(rows)) rows = [];
+  rowCache.set(id, { key, rows });
+  return rows;
 }
+
 function writeRows(id, rows) {
   ensure();
   const tmp = `${rowsPath(id)}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(rows));
   fs.renameSync(tmp, rowsPath(id));
+  // Seed the cache from what we just wrote rather than dropping it, so the
+  // next read -- which during a campaign is milliseconds away -- does not
+  // have to parse the file straight back in.
+  try {
+    const st = fs.statSync(rowsPath(id));
+    rowCache.set(id, { key: `${st.mtimeMs}:${st.size}`, rows });
+  } catch (e) { rowCache.delete(id); }
 }
 
 /**

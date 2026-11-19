@@ -136,7 +136,14 @@ function refreshCampaign(id){
   fetch('/api/campaigns/'+id+'/live',{credentials:'same-origin'})
     .then(function(r){ return r.json(); })
     .then(function(d){
-      if(!d.ok) return;
+      // Say so, rather than leaving every counter on a dash. A blank
+      // dashboard is indistinguishable from a campaign that has quietly
+      // stopped dialling, and that ambiguity costs real time to diagnose.
+      if(!d.ok){
+        put('note-'+id, d.error ? ('Dashboard error: '+d.error)
+                                : 'Dashboard could not read this campaign.');
+        return;
+      }
       var pill=document.getElementById('st-'+id);
       if(pill){ pill.textContent=d.status;
         pill.className='pill '+(d.status==='running'?'p-ok':(d.status==='paused'?'p-warn':'p-gray')); }
@@ -213,7 +220,10 @@ function refreshCampaign(id){
           row.appendChild(a); row.appendChild(b); rec.appendChild(row);
         });
       }
-    }).catch(function(){});
+    }).catch(function(){
+      put('note-'+id,
+        'Dashboard is not reaching the server — the campaign itself may still be dialling.');
+    });
 }
 function loop(){ CAMPAIGN_IDS.forEach(refreshCampaign); setTimeout(loop, 2000); }
 loop();

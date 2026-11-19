@@ -222,17 +222,25 @@ app.post('/campaigns/:id/stop', auth, async (req, res) => {
 app.get('/api/campaigns/:id/live', auth, (req, res) => {
   const c = campaigns.get(req.params.id);
   if (!c) return res.status(404).json({ ok: false, error: 'No such campaign' });
-  res.json({
-    ok: true,
-    ...dialer.status(req.params.id),
-    // A rolling tail of what just happened. Live counters say how many calls
-    // are up; this says which numbers and how they ended, which is what
-    // someone watching a campaign actually wants to see.
-    recent: calls.read(req.params.id, { limit: 15 }).map((r) => ({
-      phone: r.phone, outcome: r.outcome, label: r.outcomeLabel,
-      at: r.at, seconds: r.talkSeconds, result: r.result,
-    })),
-  });
+  // Polled every two seconds while a campaign runs. A throw here leaves every
+  // counter on the dashboard showing a dash with no explanation, which looks
+  // exactly like a campaign that has silently stopped dialling.
+  try {
+    res.json({
+      ok: true,
+      ...dialer.status(req.params.id),
+      // A rolling tail of what just happened. Live counters say how many calls
+      // are up; this says which numbers and how they ended, which is what
+      // someone watching a campaign actually wants to see.
+      recent: calls.recent(req.params.id, 15).map((r) => ({
+        phone: r.phone, outcome: r.outcome, label: r.outcomeLabel,
+        at: r.at, seconds: r.talkSeconds, result: r.result,
+      })),
+    });
+  } catch (e) {
+    console.error(`[live ${req.params.id}] ${e.stack || e.message}`);
+    res.status(500).json({ ok: false, error: e.message });
+  }
 });
 
 /**

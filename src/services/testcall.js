@@ -191,6 +191,16 @@ async function onStasisStart(event, channel) {
     return owner._onAgent(channel);
   }
 
+  // The channel coming back from the AMD dialplan hop, carrying its verdict.
+  if (args[0] === 'amd') {
+    const owner = jobs.get(args[1]);
+    if (!owner || owner.finished || !owner._onAmd) {
+      try { await channel.hangup(); } catch (e) {}
+      return;
+    }
+    return owner._onAmd(args[2] || 'NOTSURE', args[3] || '');
+  }
+
   if (args[0] !== 'test') return;                 // not ours -- the engine's
   const job = jobs.get(args[1]);
   if (!job || job.finished) {
@@ -254,6 +264,20 @@ async function onStasisStart(event, channel) {
       job._queue.push(evt.digit);
     });
     handled = true;                               // the runner owns the call now
+
+    if (job.detectMachines) {
+      const verdict = await runAmd(job, channel);
+      job.amdStatus = verdict;
+      log(job, `Answering-machine check: ${verdict}${job.amdCause ? ` (${job.amdCause})` : ''}`);
+      if (job.finished) return;                   // they hung up during analysis
+      if (verdict === 'MACHINE') {
+        job.path.push('machine');
+        try { await channel.hangup(); } catch (e) {}
+        return finish(job, false,
+          'Answering machine detected — hung up without playing the prompt.');
+      }
+    }
+
     await runFlow(job, channel, client);
     return;
   }
@@ -513,6 +537,37 @@ async function doTransfer(job, channel, client, key) {
 /**
  * The flow itself: greeting, key, action, with the two exhaustion counters.
  */
+/**
+ * Ask Asterisk whether a person or a machine answered.
+ *
+ * Fails OPEN on purpose. If AMD is not loaded, the dialplan context is
+ * missing, or the round trip takes too long, this returns something that is
+ * not MACHINE and the call proceeds as normal. Hanging up on a real lead
+ * because detection broke is far more expensive than talking to a voicemail
+ * box for twenty seconds, so every failure mode has to land on "treat as
+ * human".
+ */
+function runAmd(job, channel) {
+  return new Promise((resolve) => {
+    let done = false;
+    const settle = (v) => { if (done) return; done = true; job._onAmd = null; resolve(v); };
+    // Longer than total_analysis_time in amd.conf, with room for the hop.
+    const timer = setTimeout(() => settle('TIMEOUT'), 12000);
+    job._onAmd = (status, cause) => { clearTimeout(timer); job.amdCause = cause || ''; settle(status); };
+
+    (async () => {
+      try {
+        await channel.setChannelVar({ variable: 'STASIS_JOB', value: job.id });
+        await channel.setChannelVar({ variable: 'STASIS_APP', value: ARI_APP });
+        await channel.continueInDialplan({ context: 'amd-check', extension: 's', priority: 1 });
+      } catch (e) {
+        clearTimeout(timer);
+        settle('ERROR');
+      }
+    })();
+  });
+}
+
 async function runFlow(job, channel, client) {
   const f = job.flow;
   const byKey = new Map(f.keys.map((k) => [k.key, k]));
@@ -641,6 +696,9 @@ function start(opts) {
     finishedAt: null,
     hangupCause: null,              // SIP/Q.850 cause when it never connected
     hangupCauseText: '',
+    detectMachines: !!opts.detectMachines,
+    amdStatus: '',                  // MACHINE | HUMAN | NOTSURE | TIMEOUT | ERROR
+    amdCause: '',
     state: 'connecting',
     events: [],
     digits: [],

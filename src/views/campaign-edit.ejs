@@ -72,6 +72,22 @@
         <span class="muted" style="font-size:10px">How long the agent's phone rings before the lead
           is handed back to the flow.</span></div>
     </div>
+
+    <!-- Hidden field first: an unticked checkbox submits nothing, so without
+         it this could be switched on and never off again. -->
+    <input type="hidden" name="detectMachines" value="false">
+    <label class="form-label" style="display:flex;align-items:center;gap:8px;margin:14px 0 6px">
+      <input type="checkbox" name="detectMachines" value="true"
+             <%= c.ivr.detectMachines ? 'checked' : '' %>>
+      Hang up on answering machines</label>
+    <div class="muted" style="font-size:11px;margin-bottom:12px">
+      Listens for about four seconds after the call is answered and drops it if it sounds like
+      voicemail, instead of playing the prompt to a machine and waiting out the full menu.
+      <strong>This is a guess, not a fact.</strong> It costs every real person a short silence
+      before the prompt starts, and it will occasionally drop a live lead — check the
+      <em>Answering machine</em> count in the report against your connect rate before trusting it.
+      Worth switching on mainly when your trunk has a channel limit, since a machine otherwise
+      holds a line for the whole menu.</div>
     <% flows.forEach(function(f){ %>
       <div class="muted" data-flow="<%= f.id %>" style="font-size:11px;margin-top:8px;display:none">
         <strong><%= f.name %></strong> —

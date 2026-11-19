@@ -38,6 +38,10 @@ const DEFAULT_IVR = {
   maxGreetings: 2,
   waitSeconds: 8,
   agentRingSeconds: 30,
+  // Hang up on voicemail instead of talking to it. Costs every human a couple
+  // of seconds of silence before the prompt, and will occasionally drop a real
+  // lead, so it is off until switched on deliberately.
+  detectMachines: false,
 };
 
 const DEFAULT_PACING = {
@@ -92,6 +96,7 @@ function save(data) {
       maxGreetings: clamp(data.maxGreetings, 1, 5, 2),
       waitSeconds: clamp(data.waitSeconds, 3, 30, 8),
       agentRingSeconds: clamp(data.agentRingSeconds, 10, 120, 30),
+      detectMachines: truthyBox(data.detectMachines),
     },
     pacing: {
       ...DEFAULT_PACING,
@@ -121,6 +126,17 @@ function save(data) {
   }
   writeAll(all);
   return all;
+}
+
+/**
+ * A checkbox submits nothing when unticked, so the form carries a hidden
+ * "false" in front of it. When ticked the browser sends both and the body
+ * parser hands back an array, so the LAST value is the one that counts --
+ * without this, a setting could be turned on and never off again.
+ */
+function truthyBox(v) {
+  const last = Array.isArray(v) ? v[v.length - 1] : v;
+  return last === true || last === 'true' || last === 'on' || last === '1';
 }
 
 function clamp(v, lo, hi, dflt) {

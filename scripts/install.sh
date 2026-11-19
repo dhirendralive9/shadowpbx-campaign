@@ -145,14 +145,14 @@ fi
 
 say "Backing up stock Asterisk config"
 BK="/etc/asterisk/backup-$(date +%F-%H%M%S)"; mkdir -p "$BK"
-for f in pjsip.conf extensions.conf ari.conf http.conf rtp.conf; do
+for f in pjsip.conf extensions.conf ari.conf http.conf rtp.conf amd.conf; do
   [ -f "/etc/asterisk/$f" ] && cp "/etc/asterisk/$f" "$BK/" || true
 done
 echo "    saved to $BK"
 
 say "Writing config from .env"
 VARS='${TRUNK_HOST} ${TRUNK_USER} ${TRUNK_PASS} ${PBX_HOST} ${PBX_PORT} ${ARI_PASS}'
-for f in pjsip.conf ari.conf http.conf extensions.conf rtp.conf; do
+for f in pjsip.conf ari.conf http.conf extensions.conf rtp.conf amd.conf; do
   envsubst "$VARS" < "asterisk/$f" > "/etc/asterisk/$f"
 done
 chown asterisk:asterisk /etc/asterisk/*.conf 2>/dev/null || true

@@ -52,6 +52,7 @@ const OUTCOMES = {
   'no-answer': 'No answer',
   failed: 'Failed to connect',
   'no-agent': 'Pressed 1 but no agent free',
+  machine: 'Answering machine',
 };
 const outcomeLabel = (k) => OUTCOMES[k] || k || '';
 

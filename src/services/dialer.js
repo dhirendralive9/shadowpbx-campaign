@@ -93,6 +93,7 @@ function recordOutcome(c, rt, phone, job) {
   const path = (job.path || []).join(' → ');
   const transferred = path.includes('transfer') && job.ok;
   const optedOut = path.includes('optout');
+  const machine = path.includes('machine');
   const removed = path.includes('remove');
 
   let status = 'called';
@@ -116,6 +117,7 @@ function recordOutcome(c, rt, phone, job) {
   if (job.heardAudio) st.heardPrompt = (st.heardPrompt || 0) + 1;
 
   if (transferred) st.confirmed = (st.confirmed || 0) + 1;
+  else if (machine) st.machines = (st.machines || 0) + 1;
   else if (optedOut) st.optedOut = (st.optedOut || 0) + 1;
   else if (!connected) st.failed = (st.failed || 0) + 1;
   else if (job.digits && job.digits.length) st.answered = (st.answered || 0) + 1;
@@ -123,7 +125,7 @@ function recordOutcome(c, rt, phone, job) {
 
   // Keep the reason for the last few failures: "50 failed" is not actionable,
   // "50 failed: hangup cause 21, call rejected" is.
-  if (!connected) {
+  if (!connected && !machine) {
     st.lastFailure = job.result || '';
     leads.updateRow(c.leadListId, phone, { outcome: job.result || 'did not connect' });
   }
@@ -133,6 +135,7 @@ function recordOutcome(c, rt, phone, job) {
   // is doing; this says what happened to THIS number, which is the only thing
   // that can answer a dispute or explain an afternoon of failures.
   const outcome = transferred ? 'transferred'
+    : machine ? 'machine'
     : optedOut ? 'opted-out'
     : removed ? 'removed'
     : path.includes('noagent') || path.includes('busy') ? 'no-agent'
@@ -204,6 +207,7 @@ function placeCall(c, rt, lead, cfg) {
       serverEndpoint: `PJSIP/server-${cfg.server.id}`,
       routeNumber: cfg.server.routeNumber,
       agentRingSeconds: c.ivr.agentRingSeconds,
+      detectMachines: !!c.ivr.detectMachines,
       sound: cfg.flow.greetingAudio,
       meta: { campaignId: c.id, phone: lead.phone },
       onFinish: (finished) => {

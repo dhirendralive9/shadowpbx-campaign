@@ -225,6 +225,54 @@ Also check the SIP host is the provider's hostname. A provider portal showing
 your own server's IP under "host" means the IP they accept traffic from, not an
 address to send to.
 
+## Answering-machine detection
+
+Off by default. Switch it on per campaign: **Edit campaign -> Hang up on
+answering machines**.
+
+ARI has no AMD of its own, so the channel takes a short trip out of Stasis
+into the `[amd-check]` dialplan context, `AMD()` listens to the first few
+seconds, and the channel comes straight back carrying the verdict. If it says
+MACHINE the call is dropped before the prompt plays and the record is stored
+as outcome `machine`.
+
+Tuning lives in `/etc/asterisk/amd.conf`. `total_analysis_time` is the dial
+that matters: every second of it is a second of silence a real person hears
+before the prompt starts.
+
+**It fails open on purpose.** AMD not loaded, context missing, round trip too
+slow — all of them return something that is not MACHINE and the call proceeds
+normally. Dropping a real lead because detection broke costs more than
+talking to a voicemail box.
+
+Check it is actually available before trusting the setting:
+
+```
+asterisk -rx "module show like amd"
+```
+
+`app_amd.so` must be loaded. Then watch the **Machines** column against your
+connect rate for a run or two. A machine count that climbs while transfers
+fall means the thresholds are too aggressive and it is hanging up on people.
+
+Worth switching on mainly when the trunk has a channel limit, since a machine
+otherwise holds a line for the entire menu.
+
+### The bigger lever: the flow's own timeout
+
+A machine that is not detected costs:
+
+    greeting + timeoutSeconds + no-input prompt + greeting + timeoutSeconds
+
+With the default `timeoutSeconds` of 30 and `maxNoInput` of 2, that is roughly
+two minutes of a trunk channel per voicemail box. On a trunk with a small
+channel allowance this is what produces hangup cause 34 across the campaign.
+
+Nobody who intends to press 1 takes 30 seconds to do it. Set the flow's
+timeout to 6-8 seconds on the IVR tab and the same call costs about 25
+seconds instead. Do this before reaching for AMD; it is a larger saving, it
+is exact rather than a guess, and it cannot drop a live lead.
+
 ## Call reports
 
 Every finished campaign call writes one line to

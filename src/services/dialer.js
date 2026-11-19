@@ -24,6 +24,10 @@ const testcall = require('./testcall');
 const calls = require('./calls');
 
 const TICK_MS = 2000;
+// Consecutive calls that never reached anyone before the campaign gives up.
+// Low on purpose: these arrive within seconds of each other and every one is
+// a call that did not happen.
+const INFRA_FAIL_LIMIT = 10;
 
 // campaignId -> runtime state. Nothing here survives a restart: a campaign is
 // resumed deliberately, not silently, because nobody wants a dialler that
@@ -88,7 +92,62 @@ function capacity(c, rt) {
 
 /** What a finished call means for the lead and the campaign's counters. */
 function recordOutcome(c, rt, phone, job) {
+  const entry = rt.calls.get(phone);
   rt.calls.delete(phone);
+
+  /**
+   * A call that never happened must not cost the lead an attempt.
+   *
+   * The attempt is counted before dialling, deliberately, so a crash mid-call
+   * cannot leave a number being redialled forever. The cost of that choice is
+   * this: when the failure is OURS (ARI down, endpoint missing) or the
+   * carrier's capacity (hangup cause 34 and friends), nobody's phone rang,
+   * and charging the lead for it quietly destroys the list. ARI down for five
+   * minutes at this concurrency burns thousands of numbers to their retry
+   * limit, and they are then skipped forever.
+   */
+  if (job.failureKind) {
+    if (entry) {
+      leads.updateRow(c.leadListId, phone, {
+        status: 'pending',
+        attempts: entry.prevAttempts || 0,
+        lastAttempt: entry.prevLastAttempt || null,
+        outcome: '',
+      });
+    }
+    const st = { ...c.stats };
+    st.blocked = (st.blocked || 0) + 1;
+    // Undo the optimistic increment too: it was not a dial.
+    st.dialed = Math.max(0, (st.dialed || 0) - 1);
+    st.lastFailure = job.result || '';
+    campaigns.saveStats(c.id, st);
+
+    rt.infraFails = (rt.infraFails || 0) + 1;
+    rt.lastError = `${job.failureKind === 'infra' ? 'Infrastructure' : 'Carrier capacity'}: `
+      + `${job.result || 'call could not be placed'} — the lead was not charged an attempt.`;
+
+    // Stop rather than spin. At full concurrency a dead ARI produces hundreds
+    // of these a minute, each one a log line and a wasted tick, and the
+    // campaign looks busy while placing no calls at all.
+    if (rt.infraFails >= INFRA_FAIL_LIMIT) {
+      campaigns.setStatus(c.id, 'paused');
+      rt.lastError = `Paused after ${rt.infraFails} calls failed before reaching anyone. `
+        + `Last reason: ${job.result || 'unknown'}. No leads were charged an attempt. `
+        + 'Fix the cause, then press Start.';
+    }
+    calls.record({
+      startedAt: new Date(job.startedAt).toISOString(),
+      endedAt: new Date(job.finishedAt || Date.now()).toISOString(),
+      campaignId: c.id, campaignName: c.name, phone,
+      outcome: 'blocked', connected: false,
+      totalSeconds: ((job.finishedAt || Date.now()) - job.startedAt) / 1000,
+      trunk: cfgTrunkName(c), attempt: (entry && entry.prevAttempts) || 0,
+      hangupCause: job.hangupCause, result: job.result || '', jobId: job.id,
+    });
+    return;
+  }
+  // A real conversation resets the breaker.
+  rt.infraFails = 0;
 
   const path = (job.path || []).join(' → ');
   const transferred = path.includes('transfer') && job.ok;
@@ -184,11 +243,17 @@ function placeCall(c, rt, lead, cfg) {
   // Count the attempt before the call, not after: a crash mid-call must not
   // leave a lead that gets dialled forever.
   const row = leads.readRows(c.leadListId).find((r) => r.phone === lead.phone);
+  const prevAttempts = (row && row.attempts) || 0;
+  const prevLastAttempt = (row && row.lastAttempt) || null;
   leads.updateRow(c.leadListId, lead.phone, {
     status: 'calling',
-    attempts: ((row && row.attempts) || 0) + 1,
+    attempts: prevAttempts + 1,
     lastAttempt: new Date().toISOString(),
   });
+  // Kept so the attempt can be handed back if the call turns out never to
+  // have been placed -- see recordOutcome.
+  const held = rt.calls.get(lead.phone);
+  if (held) { held.prevAttempts = prevAttempts; held.prevLastAttempt = prevLastAttempt; }
   // Persist immediately: recordOutcome re-reads the campaign from disk, so an
   // increment held only in this copy is thrown away when the call ends. That
   // is how a dashboard ends up reporting 0 dialled and 50 outcomes.

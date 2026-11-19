@@ -52,9 +52,23 @@ say "Updating Asterisk config"
 # lands with the real value rather than the literal text.
 set -a; [ -f .env ] && . ./.env; set +a
 VARS='${TRUNK_HOST} ${TRUNK_USER} ${TRUNK_PASS} ${PBX_HOST} ${PBX_PORT} ${ARI_PASS}'
+
+# ari.conf embeds ${ARI_PASS}. If .env is missing or the variable is unset,
+# envsubst happily writes `password = ` and ARI stops authenticating at the
+# NEXT Asterisk restart -- a landmine that goes off hours later, nowhere near
+# the deploy that planted it. Refuse instead.
+if [ -z "${ARI_PASS:-}" ]; then
+  warn "ARI_PASS is not set in .env — skipping Asterisk config so ari.conf is not blanked"
+  SKIP_CONF=1
+else
+  SKIP_CONF=0
+fi
+
 CHANGED=0
 DIALPLAN=0
+ARICONF=0
 for f in extensions.conf ari.conf http.conf rtp.conf amd.conf; do
+  [ "$SKIP_CONF" -eq 1 ] && break
   [ -f "asterisk/$f" ] || continue
   TMP="$(mktemp)"
   envsubst "$VARS" < "asterisk/$f" > "$TMP"
@@ -66,6 +80,7 @@ for f in extensions.conf ari.conf http.conf rtp.conf amd.conf; do
   echo "    updated $f"
   CHANGED=1
   [ "$f" = "extensions.conf" ] && DIALPLAN=1
+  case "$f" in ari.conf|http.conf) ARICONF=1 ;; esac
 done
 [ "$CHANGED" -eq 0 ] && echo "    no changes"
 echo "    (pjsip.conf left alone — the UI owns it; press Save on a trunk to rewrite it)"
@@ -78,6 +93,16 @@ if [ "$CHANGED" -eq 1 ]; then
   # human when it is missing.
   asterisk -rx "module reload app_amd.so" >/dev/null 2>&1 \
     || warn "app_amd.so not loaded — answering-machine detection will pass every call through as human"
+
+  # Copying http.conf or ari.conf changes nothing until they are reloaded.
+  # Without this the new file sits on disk looking applied, and only takes
+  # effect at the next Asterisk restart -- usually a crash, at the worst
+  # possible moment.
+  if [ "$ARICONF" -eq 1 ]; then
+    asterisk -rx "module reload res_ari.so" >/dev/null 2>&1 || true
+    asterisk -rx "module reload http" >/dev/null 2>&1 || true
+    echo "    reloaded ARI and the HTTP server"
+  fi
 fi
 
 say "Restarting $SERVICE"
@@ -89,6 +114,18 @@ else
   warn "service did not come back up:"
   journalctl -u "$SERVICE" -n 20 --no-pager | sed 's/^/    /'
   exit 1
+fi
+
+say "Checking ARI"
+ARI_URL_C="${ARI_URL:-http://127.0.0.1:8088}"
+if curl -fsS -m 5 -u "${ARI_USER:-campaign}:${ARI_PASS:-}" \
+     "$ARI_URL_C/ari/asterisk/info" >/dev/null 2>&1; then
+  echo "    ARI is answering at $ARI_URL_C"
+else
+  warn "ARI is NOT answering at $ARI_URL_C — the campaign engine cannot place calls."
+  warn "Check:  systemctl status asterisk"
+  warn "        asterisk -rx \"http show status\""
+  warn "        asterisk -rx \"ari show users\""
 fi
 
 say "Done"

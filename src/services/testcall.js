@@ -696,6 +696,11 @@ function start(opts) {
     finishedAt: null,
     hangupCause: null,              // SIP/Q.850 cause when it never connected
     hangupCauseText: '',
+    // Set when the call failed for a reason that has nothing to do with the
+    // person being called: our own infrastructure, or the carrier having no
+    // line free. The lead was never actually dialled, so the dialler must not
+    // charge them an attempt for it.
+    failureKind: null,              // 'infra' | 'congestion' | null
     detectMachines: !!opts.detectMachines,
     amdStatus: '',                  // MACHINE | HUMAN | NOTSURE | TIMEOUT | ERROR
     amdCause: '',
@@ -718,6 +723,8 @@ async function run(job) {
   try {
     client = await connect();
   } catch (e) {
+    // ARI unreachable, not answering, app not registered: ours, not theirs.
+    job.failureKind = 'infra';
     return finish(job, false, e.message);
   }
 
@@ -732,6 +739,9 @@ async function run(job) {
     // handler owns the outcome.
     if (job.finished || job.channelId) return;
     const code = evt.cause;
+    // The congestion family: the carrier has no circuit free, or the route is
+    // out of order. Nobody's phone rang, so this is capacity, not a bad lead.
+    if ([34, 38, 42, 44, 47].includes(code)) job.failureKind = 'congestion';
     job.hangupCause = code;
     job.hangupCauseText = evt.cause_txt || '';
     const extra = causeText(code);
@@ -749,6 +759,10 @@ async function run(job) {
       timeout: 45,
     });
   } catch (e) {
+    // originate() rejecting means Asterisk would not even start the call:
+    // endpoint missing, ARI gone, no channel available locally. The carrier
+    // was never asked, so this is ours.
+    job.failureKind = 'infra';
     return finish(job, false, `Could not place the call: ${e.message}`);
   }
 

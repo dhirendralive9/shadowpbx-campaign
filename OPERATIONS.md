@@ -225,6 +225,61 @@ Also check the SIP host is the provider's hostname. A provider portal showing
 your own server's IP under "host" means the IP they accept traffic from, not an
 address to send to.
 
+## "Cannot reach ARI" while a campaign is running
+
+Asterisk's HTTP server is not answering. The campaign engine cannot place
+calls without it, so the campaign pauses itself after ten consecutive
+failures rather than spinning.
+
+Work through these in order:
+
+```
+systemctl status asterisk                 # is it even running?
+asterisk -rx "http show status"           # is the HTTP server up, on 8088?
+asterisk -rx "ari show users"             # does the campaign user exist?
+dmesg -T | grep -i -e oom -e "killed process"
+```
+
+The usual causes:
+
+**Asterisk died.** On a small VPS, high concurrency plus an OOM kill is the
+common one — `dmesg` will say so outright. By default a source-built Asterisk
+has no restart policy, so it stays down. Fix that once:
+
+```
+./scripts/asterisk-resilience.sh
+```
+
+That adds a systemd drop-in: restart always, no start-limit give-up, 65535
+file descriptors, and an OOM score that makes the kernel look elsewhere
+first.
+
+**http.conf was changed and never reloaded.** Copying the file is not enough;
+`update.sh` now reloads ARI and the HTTP server when either file changes.
+
+**ARI_PASS does not match.** `.env` and `/etc/asterisk/ari.conf` have to
+agree. `update.sh` refuses to write the Asterisk config at all when
+`ARI_PASS` is unset, because envsubst would otherwise write a blank password
+that breaks ARI at the next restart — hours later, far from the deploy that
+caused it.
+
+### What happens to the leads
+
+Nothing. A call that never reached anyone does not cost that lead an
+attempt — the attempt is refunded and the number goes straight back in the
+queue. This covers both infrastructure failures and carrier congestion
+(hangup cause 34 and its family). They are recorded with outcome `blocked`
+so the report shows how many calls did not happen, and they are counted
+separately from `failed`, which means the call was placed and the carrier or
+the lead ended it.
+
+This matters more than it sounds. The attempt is counted *before* dialling,
+so that a crash mid-call cannot leave a number being redialled forever.
+Without the refund, ARI down for five minutes at high concurrency would
+charge thousands of numbers an attempt they never received, park each one for
+the retry delay, and eventually exhaust their retries — destroying a list
+without a single phone ringing.
+
 ## Updating a running server
 
 ```

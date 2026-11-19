@@ -15,6 +15,11 @@
 # you have configured. Trunk changes go live when you press Save on the
 # Trunks tab, which rewrites it and reloads PJSIP.
 #
+# Re-exec under bash if this was started with `sh` (dash on Debian/Ubuntu).
+# `set -o pipefail` is a bashism and dash aborts on it with "Illegal option",
+# which reads like a bug in the script rather than the wrong interpreter.
+[ -n "${BASH_VERSION:-}" ] || exec bash "$0" "$@"
+
 set -euo pipefail
 
 cd "$(dirname "$0")/.."

@@ -133,6 +133,14 @@
       <div class="form-group"><label class="form-label">Max concurrent calls</label>
         <input class="form-input" name="maxConcurrent" type="number" min="1" max="200" value="<%= c.pacing.maxConcurrent %>">
         <span class="muted" style="font-size:10px">Hard ceiling, whatever the ratio works out to.</span></div>
+      <div class="form-group"><label class="form-label">Carrier CPS limit</label>
+        <input class="form-input" name="callsPerSecond" type="number" min="0" max="100"
+               value="<%= c.pacing.callsPerSecond %>">
+        <span class="muted" style="font-size:10px">New calls per second, as the
+          <strong>carrier</strong> allows — ask them, don't guess. Going over it gets the surplus
+          rejected with <span class="mono">503</span> / hangup cause 34, which reads like
+          congestion or a dead trunk. 0 = uncapped.</span></div>
+
       <div class="form-group"><label class="form-label">Calls/hour cap</label>
         <input class="form-input" name="callsPerHourCap" type="number" min="0" value="<%= c.pacing.callsPerHourCap %>">
         <span class="muted" style="font-size:10px">0 = uncapped.</span></div>

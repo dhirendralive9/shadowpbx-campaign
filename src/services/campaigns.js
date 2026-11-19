@@ -53,6 +53,10 @@ const DEFAULT_PACING = {
   retryAttempts: 1,
   retryDelayMinutes: 60,
   callsPerHourCap: 0,       // 0 = uncapped
+  // Calls per second the carrier will accept. This is THEIR limit, not a
+  // preference: exceed it and the INVITEs come back 503 / hangup cause 34,
+  // which looks exactly like congestion or a bad trunk. Ask the provider.
+  callsPerSecond: 10,       // 0 = uncapped
 };
 
 function ensure() { fs.mkdirSync(DIR, { recursive: true }); }
@@ -109,6 +113,7 @@ function save(data) {
       retryAttempts: clamp(data.retryAttempts, 0, 5, 1),
       retryDelayMinutes: clamp(data.retryDelayMinutes, 5, 1440, 60),
       callsPerHourCap: clamp(data.callsPerHourCap, 0, 100000, 0),
+      callsPerSecond: clamp(data.callsPerSecond, 0, 100, 10),
     },
   };
 

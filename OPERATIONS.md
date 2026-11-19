@@ -225,6 +225,31 @@ Also check the SIP host is the provider's hostname. A provider portal showing
 your own server's IP under "host" means the IP they accept traffic from, not an
 address to send to.
 
+## CPS — calls per second
+
+Set **Carrier CPS limit** on the campaign to whatever the provider allows.
+Ask them; do not guess. It is their limit, not a preference.
+
+This is separate from concurrency, and the two are easy to confuse:
+
+- **Max concurrent** is how many calls may be *up at once*.
+- **CPS** is how many *new* calls may be started *per second*.
+
+A carrier can happily hold 200 simultaneous calls and still reject the
+eleventh INVITE in a given second. Go over the CPS limit and the surplus
+comes back `503` / hangup cause 34, which from this side is
+indistinguishable from congestion or a broken trunk.
+
+The dialler hands out dial slots from a running cursor, so spacing holds
+across ticks as well as within one -- ten calls at the end of one tick and
+ten at the start of the next is still twenty in a second, and that counts.
+A call waiting for its slot shows as *waiting its turn* on the dashboard and
+holds its concurrency slot while it waits, so it cannot be dialled twice.
+
+Note the limit is per campaign. Two campaigns on the same trunk each get
+their own budget and will together exceed what the carrier allows, so run one
+campaign per trunk unless you split the limit between them by hand.
+
 ## "Cannot reach ARI" while a campaign is running
 
 Asterisk's HTTP server is not answering. The campaign engine cannot place

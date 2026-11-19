@@ -240,8 +240,33 @@ function cfgTrunkName(c) {
   } catch (e) { return ''; }
 }
 
-function placeCall(c, rt, lead, cfg) {
-  rt.calls.set(lead.phone, { state: 'dialing', startedAt: nowSec(), jobId: null });
+function placeCall(c, rt, lead, cfg, delayMs = 0) {
+  // Reserve the slot NOW even when the dial itself is held back for pacing.
+  // The next tick excludes whatever is in rt.calls; a lead that is scheduled
+  // but not yet reserved would be picked up again and dialled twice.
+  rt.calls.set(lead.phone, {
+    state: delayMs > 0 ? 'queued' : 'dialing', startedAt: nowSec(), jobId: null,
+  });
+
+  if (delayMs > 0) {
+    setTimeout(() => {
+      // Conditions change while a call waits its turn: the campaign may have
+      // been paused or stopped, or the slot released by a sweep.
+      const live = campaigns.get(c.id);
+      if (!live || live.status !== 'running' || !rt.calls.has(lead.phone)) {
+        rt.calls.delete(lead.phone);
+        return;
+      }
+      const e = rt.calls.get(lead.phone);
+      if (e) e.state = 'dialing';
+      dialNow(live, rt, lead, cfg);
+    }, delayMs);
+    return;
+  }
+  dialNow(c, rt, lead, cfg);
+}
+
+function dialNow(c, rt, lead, cfg) {
   rt.hourWindow.push(nowSec());
 
   // Count the attempt before the call, not after: a crash mid-call must not
@@ -359,7 +384,31 @@ function tick(id) {
     }
     return;
   }
-  for (const lead of due) placeCall(c, rt, lead, cfg);
+  /**
+   * Spread the batch across time instead of firing it in one instant.
+   *
+   * A tick could previously place its whole allowance at once -- forty calls
+   * in the same millisecond. Carriers rate-limit on calls per SECOND, so a
+   * burst like that blows through a 10 CPS allowance four times over and the
+   * surplus comes back 503 / hangup cause 34. From this side that is
+   * indistinguishable from congestion or a broken trunk, which is exactly how
+   * it was being read.
+   *
+   * Slots are handed out from a running cursor so the spacing holds ACROSS
+   * ticks too, not just within one: ten calls at the end of one tick and ten
+   * at the start of the next is still twenty in a second.
+   */
+  const cps = c.pacing.callsPerSecond || 0;
+  const spacing = cps > 0 ? 1000 / cps : 0;
+  const now = Date.now();
+  if (rt.nextSlotAt == null || rt.nextSlotAt < now) rt.nextSlotAt = now;
+
+  for (const lead of due) {
+    if (!spacing) { placeCall(c, rt, lead, cfg); continue; }
+    const at = rt.nextSlotAt;
+    rt.nextSlotAt = at + spacing;
+    placeCall(c, rt, lead, cfg, Math.max(0, at - now));
+  }
 }
 
 // ------------------------------------------------------------------ api

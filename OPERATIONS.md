@@ -231,6 +231,22 @@ Asterisk's HTTP server is not answering. The campaign engine cannot place
 calls without it, so the campaign pauses itself after ten consecutive
 failures rather than spinning.
 
+**First, check whether Asterisk is actually the problem** — it usually is not.
+
+A `TimeoutError` on a request to `127.0.0.1` does not mean the server failed
+to answer. It means this Node process did not read the reply within five
+seconds. Node is single-threaded: enough synchronous work on the event loop
+(parsing a large lead list, reading a day of call records) and a localhost
+round trip that normally takes a millisecond never completes, while Asterisk
+sits there perfectly healthy having answered immediately.
+
+So if `systemctl status asterisk` shows it running and `http show status`
+shows ARI enabled, the PBX is fine and the campaign engine was CPU-starved.
+Lower the concurrency, and make sure you are past the commit that caches the
+lead list.
+
+A `ConnectionRefused` or `ECONNREFUSED`, by contrast, really is Asterisk.
+
 Work through these in order:
 
 ```

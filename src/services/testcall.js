@@ -108,9 +108,15 @@ async function preflight() {
   } catch (e) {
     const code = (e.cause && e.cause.code) || e.name;
     throw new Error(
-      `nothing answered at ${ARI_URL} (${code}). Asterisk's HTTP server is off or on another port: `
-      + 'check /etc/asterisk/http.conf (enabled=yes, bindaddr=127.0.0.1, bindport=8088), '
-      + 'then run: asterisk -rx "http show status"');
+      `nothing answered at ${ARI_URL} within 5s (${code}). `
+      + (code === 'TimeoutError'
+        ? 'Note that a timeout on a LOCALHOST request usually means this app was too busy to '
+          + 'read the reply, not that Asterisk is down — check `systemctl status asterisk` and '
+          + '`asterisk -rx "http show status"` before assuming the PBX is at fault. '
+          + 'If both look healthy, this process was CPU-starved; lower the campaign concurrency.'
+        : 'Asterisk\'s HTTP server is off or on another port: check /etc/asterisk/http.conf '
+          + '(enabled=yes, bindaddr=127.0.0.1, bindport=8088), then run: '
+          + 'asterisk -rx "http show status"'));
   }
   if (r.status === 401) {
     throw new Error(
@@ -125,9 +131,20 @@ async function preflight() {
   if (!r.ok) throw new Error(`ARI answered HTTP ${r.status} at ${ARI_URL}/ari/api-docs/resources.json`);
 }
 
+// After a connection failure, hold the error briefly instead of letting every
+// waiting call re-run the preflight. At campaign concurrency a dropped ARI
+// produces a hundred simultaneous connection attempts, each with its own 5s
+// HTTP timeout, and the stampede keeps the event loop too busy to recover --
+// the failure sustains itself.
+const CONNECT_COOLDOWN_MS = 5000;
+let lastFailure = null;                     // { at, error }
+
 function connect() {
   if (!ARI_PASS) return Promise.reject(new Error('ARI_PASS is not set in .env'));
   if (clientP) return clientP;
+  if (lastFailure && Date.now() - lastFailure.at < CONNECT_COOLDOWN_MS) {
+    return Promise.reject(lastFailure.error);
+  }
   clientP = preflight()
     .then(() => withTimeout(ari.connect(ARI_URL, ARI_USER, ARI_PASS), 15000, 'ARI did not respond within 15s'))
     .then(async (c) => {
@@ -137,14 +154,17 @@ function connect() {
       c.on('WebSocketClose', () => { clientP = null; });
       c.on('WebSocketError', () => { clientP = null; });
       await withTimeout(c.start(ARI_APP), 15000, 'registering the ARI app timed out after 15s');
+      lastFailure = null;
       return c;
     })
     .catch((e) => {
       clientP = null;
-      throw new Error(
+      const err = new Error(
         `Cannot reach ARI at ${ARI_URL} as "${ARI_USER}": ${e.message}. `
         + 'Check ari.conf and http.conf, and that ARI_PASS matches.'
       );
+      lastFailure = { at: Date.now(), error: err };
+      throw err;
     });
   return clientP;
 }

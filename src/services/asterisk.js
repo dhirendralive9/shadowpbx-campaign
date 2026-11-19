@@ -172,8 +172,9 @@ transport = transport-udp
 ${hasAuth ? `outbound_auth = ${id}-auth` : '; no password saved for this trunk — registering without credentials'}
 server_uri = sip:${esc(t.host)}
 client_uri = sip:${esc(t.user)}@${esc(t.host)}
-line = yes
-endpoint = ${id}
+${t.lineSupport === false
+  ? '; line support off — inbound is matched by the identify section instead'
+  : `line = yes\nendpoint = ${id}`}
 retry_interval = 60
 forbidden_retry_interval = 600
 expiration = 3600
@@ -367,11 +368,23 @@ async function diagnoseTrunk(id) {
       + '(“IP to IP”) and does not accept REGISTER at all: untick “Register with the provider” on this trunk '
       + 'and make sure this server’s public IP is the one on the account. The other cause is an IP that is not '
       + 'authorised yet, or an account already registered from somewhere else.';
-  } else if (codes.includes('403')) out.hint = '403 Forbidden after a challenge — the credentials were read and rejected. Check the username/password exactly, and whether the provider expects a separate auth username.';
-  else if (codes.includes('401') || codes.includes('407')) out.hint = '401/407 repeatedly — the auth challenge is being answered with the wrong password, or the provider expects a different auth username than the SIP user.';
+  } else if (codes.includes('403')) out.hint = '403 Forbidden after a challenge — the credentials were read and rejected. '
+    + 'Check the username and password exactly, and whether the provider expects a separate auth username. '
+    + 'If the SAME account is registered somewhere else right now (the PBX, a softphone), that is the usual cause: '
+    + 'many providers allow one registration per account and refuse the second. Unregister it there and retry here.';
+  else if (codes.includes('401') || codes.includes('407')) out.hint = '401 after the credentials were sent — Asterisk answered the challenge and was challenged again, '
+    + 'which it treats as fatal ("stopping outbound registration") and will not retry until the trunk is saved. '
+    + 'Two causes: the password is not what the provider holds (blank means unchanged on this form, so a wrong one '
+    + 'persists — type it in again), or the provider authenticates under a different ID than the account name, '
+    + 'which goes in "Auth username". A trunk that registers elsewhere with the same account name almost always '
+    + 'means one of these two differs between the two machines.';
   else if (codes.includes('404')) out.hint = '404 Not Found — the provider does not recognise this account on that host. Check the SIP host and username.';
   else if (codes.includes('408') || !out.sip.trim()) out.hint = 'No response — the REGISTER is not reaching the provider. Check outbound UDP 5060 and that the SIP host resolves.';
   else if (codes.includes('503')) out.hint = '503 Service Unavailable — provider-side problem or rate limiting.';
+  else if (codes.includes('423')) out.hint = '423 Interval Too Brief — the provider wants a longer expiry than the 3600s requested.';
+  else if (codes.includes('400')) out.hint = '400 Bad Request — the provider objects to the REGISTER itself rather than to the account. '
+    + 'The usual culprit is the Contact header: with line support on, Asterisk appends a ;line= parameter and a strict '
+    + 'registrar can refuse it. Turn off "Line support" on this trunk and try again.';
   return out;
 }
 

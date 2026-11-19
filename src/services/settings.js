@@ -99,6 +99,12 @@ function saveTrunk(data) {
     name: (data.name || '').trim() || 'Unnamed trunk',
     host: (data.host || '').trim(),
     user: (data.user || '').trim(),
+    // Some providers authenticate under a different ID than the SIP account
+    // name. The generator has always honoured this field; nothing ever saved
+    // it, so it was permanently undefined and the account name was used for
+    // both. A provider that wants a separate auth ID answers every REGISTER
+    // with another 401 and Asterisk gives up for good.
+    authUser: (data.authUser || '').trim(),
     port: parseInt(data.port, 10) || 5060,
     transport: data.transport || 'udp',
     // A checkbox sends nothing when unticked, so the form carries a hidden
@@ -123,6 +129,13 @@ function saveTrunk(data) {
     // A carrier that dislikes the format rejects the INVITE instantly, which
     // looks identical to an authentication failure from the outside.
     numberFormat: ['e164', 'plain', 'intl'].includes(data.numberFormat) ? data.numberFormat : 'e164',
+    // Line support puts a ;line= parameter in the REGISTER's Contact so the
+    // provider's inbound calls come back on that binding. It is optional here
+    // -- inbound is already matched by the identify section -- and a strict
+    // registrar can refuse the extra parameter outright. On by default,
+    // because that is what the trunks that currently work are using.
+    lineSupport: truthy(Array.isArray(data.lineSupport)
+      ? data.lineSupport[data.lineSupport.length - 1] : data.lineSupport),
     // Extra IPs the provider sends from, when they differ from the SIP host.
     matchIps: (data.matchIps || '').trim(),
     callerId: (data.callerId || '').trim(),

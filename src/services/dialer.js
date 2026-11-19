@@ -172,7 +172,11 @@ function recordOutcome(c, rt, phone, job) {
   // interested in and a campaign whose calls are not connecting at all --
   // which look identical on a dashboard and could not be more different.
   const st = { ...c.stats };
-  const connected = !!(job.heardAudio || (job.digits && job.digits.length));
+  // Answered is the honest test of "connected": the channel entered Stasis,
+  // so the far end picked up. Audio and keypresses are evidence too, but they
+  // come later and can fail for their own reasons -- a call where the prompt
+  // could not be played still reached a person.
+  const connected = !!(job.answeredAt || job.heardAudio || (job.digits && job.digits.length));
   if (job.heardAudio) st.heardPrompt = (st.heardPrompt || 0) + 1;
 
   if (transferred) st.confirmed = (st.confirmed || 0) + 1;

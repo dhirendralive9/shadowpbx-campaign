@@ -401,6 +401,16 @@ async function playInterruptible(job, channel, sound) {
   try { pb = await channel.play({ media: `sound:${sound}` }); }
   catch (e) { log(job, `Could not play ${sound}: ${e.message}`); return; }
 
+  // Audio started on an answered channel, so somebody is listening.
+  //
+  // Everything downstream keys off this: `connected`, the heard-the-prompt
+  // count, and whether the outcome is "no keypress" or "never connected".
+  // The flow runner never set it, so every campaign call that was answered
+  // but produced no keypress was filed as a call that never connected --
+  // which is the opposite of what happened, and made the whole dashboard
+  // read as a dead trunk.
+  job.heardAudio = true;
+
   await new Promise((resolve) => {
     let done = false;
     const finish = () => { if (!done) { done = true; clearInterval(poll); resolve(); } };

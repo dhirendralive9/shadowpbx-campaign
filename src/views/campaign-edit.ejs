@@ -75,6 +75,16 @@
 
     <!-- Hidden field first: an unticked checkbox submits nothing, so without
          it this could be switched on and never off again. -->
+    <div class="grid-3">
+      <div class="form-group"><label class="form-label">Max seconds per call</label>
+        <input class="form-input" name="maxCallSeconds" type="number" min="0" max="600"
+               value="<%= c.ivr.maxCallSeconds %>">
+        <span class="muted" style="font-size:10px">Ceiling on the menu part of a call, timed from
+          the dial. The round limits cap how many prompts play, not how long the call lasts — and a
+          line held for two minutes by someone who pressed nothing is what exhausts a trunk's
+          channels. Never applies once a call reaches an agent. 0 = no limit.</span></div>
+    </div>
+
     <input type="hidden" name="detectMachines" value="false">
     <label class="form-label" style="display:flex;align-items:center;gap:8px;margin:14px 0 6px">
       <input type="checkbox" name="detectMachines" value="true"

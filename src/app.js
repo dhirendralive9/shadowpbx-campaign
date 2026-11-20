@@ -128,10 +128,35 @@ app.get('/leads', auth, (req, res) =>
 app.get('/leads/:id', auth, (req, res) => {
   const l = leads.get(req.params.id);
   if (!l) return res.redirect('/leads?err=' + encodeURIComponent('List not found'));
+  const p = leads.page(l.id, {
+    page: req.query.page, per: req.query.per,
+    status: req.query.status || '', q: req.query.q || '',
+  });
   res.render('lead-detail', base(req, {
-    active: 'leads', list: l,
-    rows: l.rows.slice(0, 200), stats: leads.stats(l.id), countries: leads.COUNTRIES,
+    active: 'leads', list: l, pager: p, rows: p.rows,
+    stats: leads.stats(l.id), counts: leads.statusCounts(l.id),
+    countries: leads.COUNTRIES,
+    filter: { status: req.query.status || '', q: req.query.q || '' },
   }));
+});
+
+/**
+ * The same page as JSON, so the table can refresh itself while a campaign
+ * runs. Without it the statuses on screen are whatever they were when the
+ * page was opened, which is actively misleading during a live run.
+ */
+app.get('/api/leads/:id/rows', auth, (req, res) => {
+  const l = leads.get(req.params.id);
+  if (!l) return res.status(404).json({ ok: false, error: 'No such list' });
+  try {
+    const p = leads.page(l.id, {
+      page: req.query.page, per: req.query.per,
+      status: req.query.status || '', q: req.query.q || '',
+    });
+    res.json({ ok: true, ...p, stats: leads.stats(l.id), counts: leads.statusCounts(l.id) });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
 });
 
 app.get('/campaigns', auth, (req, res) =>

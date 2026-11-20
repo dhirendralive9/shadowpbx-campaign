@@ -526,7 +526,12 @@ a:hover { text-decoration: underline; }
 
 /* ── Campaign module additions ───────────────────────────── */
 .row-flex{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.out-pre{background:#0b0e13;border:1px solid var(--border,#262d3a);border-radius:6px;
+/* The background was hard-coded near-black while the text colour follows the
+   theme, so in light mode this was dark text on a dark box -- the CSV format
+   examples were unreadable for anyone not using dark mode. Both sides of the
+   contrast now come from the theme. */
+.out-pre{background:var(--bg-surface);color:var(--text-primary);
+border:1px solid var(--border);border-radius:6px;
 padding:10px;font-size:11px;max-height:300px;overflow:auto;white-space:pre-wrap;margin-top:10px}
 .alert{padding:9px 12px;border-radius:6px;margin-bottom:14px;border:1px solid;font-size:12px}
 .alert-ok{color:#2ea043;border-color:rgba(46,160,67,.4);background:rgba(46,160,67,.1)}

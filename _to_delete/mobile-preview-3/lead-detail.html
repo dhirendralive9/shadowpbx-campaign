@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>German PP TEST — ShadowPBX Campaign</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="layout">
+    <div class="header-wrap">
+      <header class="header">
+  <div class="brand">
+    <div class="brand-mark"></div>
+    <span class="brand-name">ShadowPBX</span>
+    <span class="brand-tag">Campaign</span>
+  </div>
+  <div class="header-spacer"></div>
+  <div class="header-status"><span class="header-dot"></span> Online</div>
+  <span class="pill p-miss" style="margin-left:12px;font-size:9px">campaign</span>
+  <span class="header-user">campaign</span>
+  <form method="POST" action="/logout" style="display:inline">
+    <button type="submit" class="header-logout" style="background:none;border:none;cursor:pointer;font:inherit;color:inherit;padding:0">Sign out</button>
+  </form>
+</header>
+
+      
+<nav class="tabs">
+  
+    <a href="/" class="tab "><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Overview</a>
+  
+    <a href="/trunks" class="tab "><svg viewBox="0 0 24 24"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 000-7h-11a3.5 3.5 0 010-7H15"/><circle cx="18" cy="5" r="3"/></svg>Trunks</a>
+  
+    <a href="/servers" class="tab "><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>Servers</a>
+  
+    <a href="/audio" class="tab "><svg viewBox="0 0 24 24"><circle cx="5.5" cy="11.5" r="4.5"/><circle cx="18.5" cy="11.5" r="4.5"/><line x1="5.5" y1="16" x2="18.5" y2="16"/></svg>Audio</a>
+  
+    <a href="/ivr" class="tab "><svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></svg>IVR</a>
+  
+    <a href="/leads" class="tab active"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>Leads</a>
+  
+    <a href="/campaigns" class="tab "><svg viewBox="0 0 24 24"><path d="M3 11l18-5v12L3 13v-2z"/><path d="M11.6 16.8a3 3 0 11-5.8-1.6"/></svg>Campaigns</a>
+  
+</nav>
+
+    </div>
+    <main>
+
+
+
+
+
+<div class="section">
+  <div class="sec-head">
+    <div class="sec-title">German PP TEST
+      <span class="pill p-info">DE +</span></div>
+    <a class="sec-link" href="/leads">← All lists</a></div>
+
+  <div class="kpi-row">
+    <div class="kpi"><div class="kpi-top"><span class="kpi-label">Total</span></div>
+      <div class="kpi-val">988</div></div>
+    
+      <div class="kpi"><div class="kpi-top"><span class="kpi-label">pending</span></div>
+        <div class="kpi-val">132</div></div>
+    
+      <div class="kpi"><div class="kpi-top"><span class="kpi-label">called</span></div>
+        <div class="kpi-val">768</div></div>
+    
+      <div class="kpi"><div class="kpi-top"><span class="kpi-label">confirmed</span></div>
+        <div class="kpi-val">0</div></div>
+    
+      <div class="kpi"><div class="kpi-top"><span class="kpi-label">failed</span></div>
+        <div class="kpi-val">0</div></div>
+    
+  </div>
+</div>
+
+<div class="section">
+  <div class="sec-head"><div class="sec-title">Upload leads</div>
+    <span class="muted" style="font-size:11px">CSV with a header row, or a plain list of numbers</span></div>
+  <div class="card">
+    <form method="post" action="/leads/l1/upload" enctype="multipart/form-data">
+      <div class="grid-2">
+        <div class="form-group"><label class="form-label">File</label>
+          <input class="form-input" type="file" name="file"
+                 accept=".csv,.txt,.tsv,text/csv,text/plain" required>
+          <span class="muted" style="font-size:11px">.csv or .txt — the format is detected from the
+            first line, so you do not have to say which.</span></div>
+      </div>
+      <button class="btn btn-primary" type="submit">Import</button>
+    </form>
+
+    <div class="grid-2" style="margin-top:18px">
+      <div>
+        <div class="form-label">CSV — with a header row</div>
+        <pre class="out-pre" style="margin:4px 0">phone,name,company,email
++4915112345678,Anna Weber,Weber GmbH,anna@weber.de
+004915798765432,Jonas Klein,,
+15551234567,Pat Lee,Lee Co,pat@lee.com</pre>
+        <span class="muted" style="font-size:11px">
+          Only the phone column is required and it may be named
+          <span class="mono">phone</span>, <span class="mono">number</span>,
+          <span class="mono">mobile</span>, <span class="mono">cell</span>,
+          <span class="mono">tel</span> or <span class="mono">msisdn</span>. If none of those match,
+          the first column is used. <span class="mono">first name</span> and
+          <span class="mono">last name</span> are joined when there is no
+          <span class="mono">name</span>. A <span class="mono">prefix</span> or
+          <span class="mono">country_code</span> column overrides this list's country code for that row.
+        </span>
+      </div>
+      <div>
+        <div class="form-label">Text — one number per line</div>
+        <pre class="out-pre" style="margin:4px 0">+4915112345678
+004915798765432
+015112345678
+9178 988 634</pre>
+        <span class="muted" style="font-size:11px">
+          No header, no other columns. Spaces, dashes, brackets and dots are ignored.
+          Numbers that are already international (<span class="mono">+</span> or
+          <span class="mono">00</span>) are kept as they are; the rest get this list's country code
+          <span class="mono"></span>, with a leading national
+          <span class="mono">0</span> dropped.
+        </span>
+      </div>
+    </div>
+
+    <div class="muted" style="font-size:11px;margin-top:12px">
+      Either way: duplicates already in this list are skipped, anything under 7 digits is counted
+      invalid, and the import reports lines read, imported, duplicates and invalid.
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="sec-head"><div class="sec-title">List settings</div></div>
+  <div class="card">
+    <form method="post" action="/leads/l1/update">
+      <div class="grid-2">
+        <div class="form-group"><label class="form-label">Name</label>
+          <input class="form-input" name="name" value="German PP TEST" required></div>
+        <div class="form-group"><label class="form-label">Country</label>
+          <select class="form-select" name="country">
+            
+              <option value="DE|Germany"
+                >
+                Germany (+DE)</option>
+            
+          </select></div>
+      </div>
+      <button class="btn" type="submit">Save</button>
+      <span class="muted" style="font-size:11px;margin-left:8px">Changing the country affects future imports, not rows already stored.</span>
+    </form>
+  </div>
+</div>
+
+<div class="section">
+  <div class="sec-head"><div class="sec-title">Leads</div>
+    <span class="muted" style="font-size:11px" id="range">
+      51–100 of 988</span></div>
+
+  <div class="card" style="margin-bottom:12px">
+    <form method="get" class="grid-3" style="align-items:end;margin:0">
+      <div class="form-group" style="margin:0"><label class="form-label">Status</label>
+        <select class="form-select" name="status" onchange="this.form.submit()">
+          <option value="">All statuses</option>
+          
+            <option value="called" >called (768)</option>
+          
+            <option value="dnc" >dnc (38)</option>
+          
+            <option value="done" >done (50)</option>
+          
+            <option value="pending" >pending (132)</option>
+          
+        </select></div>
+      <div class="form-group" style="margin:0"><label class="form-label">Search</label>
+        <input class="form-input" name="q" value="" placeholder="number, name or company"></div>
+      <div class="form-group" style="margin:0"><label class="form-label">Rows per page</label>
+        <select class="form-select" name="per" onchange="this.form.submit()">
+          
+            <option value="50" selected>50</option>
+          
+            <option value="100" >100</option>
+          
+            <option value="200" >200</option>
+          
+            <option value="500" >500</option>
+          
+        </select></div>
+      <div class="form-group" style="margin:0;grid-column:1/-1">
+        <button class="btn btn-sm btn-primary">Apply</button>
+        <a class="btn btn-sm" href="/leads/l1">Reset</a>
+        <label class="muted" style="font-size:11px;margin-left:10px">
+          <input type="checkbox" id="auto" checked> Keep this page up to date
+        </label>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    
+    <table class="tbl" id="lead-table" ><thead><tr>
+      <th>Phone</th><th>Name</th><th>Company</th><th>Status</th><th>Attempts</th><th>Outcome</th>
+    </tr></thead><tbody id="lead-rows">
+    
+      <tr><td class="mono">491510000050</td><td>Anna Weber</td>
+        <td>—</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000051</td><td>—</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000052</td><td>Anna Weber</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000053</td><td>Anna Weber</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000054</td><td>—</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000055</td><td>Anna Weber</td>
+        <td>—</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000056</td><td>Anna Weber</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000057</td><td>—</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000058</td><td>Anna Weber</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000059</td><td>Anna Weber</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000060</td><td>—</td>
+        <td>—</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000061</td><td>Anna Weber</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000062</td><td>Anna Weber</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000063</td><td>—</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000064</td><td>Anna Weber</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000065</td><td>Anna Weber</td>
+        <td>—</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000066</td><td>—</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000067</td><td>Anna Weber</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000068</td><td>Anna Weber</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000069</td><td>—</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000070</td><td>Anna Weber</td>
+        <td>—</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000071</td><td>Anna Weber</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000072</td><td>—</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000073</td><td>Anna Weber</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000074</td><td>Anna Weber</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000075</td><td>—</td>
+        <td>—</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000076</td><td>Anna Weber</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000077</td><td>Anna Weber</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000078</td><td>—</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000079</td><td>Anna Weber</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000080</td><td>Anna Weber</td>
+        <td>—</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000081</td><td>—</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000082</td><td>Anna Weber</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000083</td><td>Anna Weber</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000084</td><td>—</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000085</td><td>Anna Weber</td>
+        <td>—</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000086</td><td>Anna Weber</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000087</td><td>—</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000088</td><td>Anna Weber</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000089</td><td>Anna Weber</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000090</td><td>—</td>
+        <td>—</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000091</td><td>Anna Weber</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000092</td><td>Anna Weber</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000093</td><td>—</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000094</td><td>Anna Weber</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000095</td><td>Anna Weber</td>
+        <td>—</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000096</td><td>—</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000097</td><td>Anna Weber</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000098</td><td>Anna Weber</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+      <tr><td class="mono">491510000099</td><td>—</td>
+        <td>Weber GmbH</td>
+        <td><span class="pill p-gray">pending</span></td>
+        <td>0</td><td class="muted">—</td></tr>
+    
+    </tbody></table>
+
+    
+    <div class="row-flex" style="margin-top:14px;justify-content:space-between">
+      <span class="muted" style="font-size:11px">Page 2 of 20</span>
+      <span class="row-flex">
+        
+        <a class="btn btn-sm" href="/leads/l1?page=1&amp;per=50&amp;status=&amp;q="
+           >« First</a>
+        <a class="btn btn-sm" href="/leads/l1?page=1&amp;per=50&amp;status=&amp;q="
+           >‹ Prev</a>
+        <a class="btn btn-sm" href="/leads/l1?page=3&amp;per=50&amp;status=&amp;q="
+           >Next ›</a>
+        <a class="btn btn-sm" href="/leads/l1?page=20&amp;per=50&amp;status=&amp;q="
+           >Last »</a>
+      </span>
+    </div>
+    
+  </div>
+</div>
+
+<script>
+/*
+ * Keep the visible page current.
+ *
+ * A lead list is read while a campaign is working through it, so statuses,
+ * attempt counts and outcomes change under the reader. Without this the page
+ * shows whatever was true when it was opened, which during a live run is
+ * worse than showing nothing.
+ *
+ * Only the rows currently on screen are fetched, so the cost does not grow
+ * with the size of the list.
+ */
+(function () {
+  var LIST = "l1";
+  var Q = { page: 2, per: 50,
+            status: "", q: "" };
+  var PILL = { pending: 'p-gray', done: 'p-ok', dnc: 'p-warn' };
+
+  function cell(text, cls) {
+    var td = document.createElement('td');
+    if (cls) td.className = cls;
+    td.textContent = text == null || text === '' ? '—' : String(text);
+    return td;
+  }
+
+  function draw(d) {
+    var body = document.getElementById('lead-rows');
+    if (!body) return;
+    body.textContent = '';
+    d.rows.forEach(function (r) {
+      var tr = document.createElement('tr');
+      tr.appendChild(cell(r.phone, 'mono'));
+      tr.appendChild(cell(r.name));
+      tr.appendChild(cell(r.company));
+      var st = document.createElement('td');
+      var pill = document.createElement('span');
+      pill.className = 'pill ' + (PILL[r.status] || 'p-info');
+      pill.textContent = r.status || 'pending';
+      st.appendChild(pill); tr.appendChild(st);
+      tr.appendChild(cell(r.attempts));
+      tr.appendChild(cell(r.outcome, 'muted'));
+      body.appendChild(tr);
+    });
+    var range = document.getElementById('range');
+    if (range) {
+      range.textContent = d.total ? d.from + '–' + d.to + ' of ' + d.total
+        + (d.filtered ? ' (filtered from ' + d.grandTotal + ')' : '') : '0';
+    }
+  }
+
+  function tick() {
+    var box = document.getElementById('auto');
+    if (!box || !box.checked) return;
+    // A page in the background does not need refreshing, and a phone should
+    // not be polling in someone's pocket.
+    if (document.hidden) return;
+    var u = '/api/leads/' + LIST + '/rows?page=' + Q.page + '&per=' + Q.per
+          + '&status=' + encodeURIComponent(Q.status) + '&q=' + encodeURIComponent(Q.q);
+    fetch(u, { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { if (d.ok) draw(d); })
+      .catch(function () {});
+  }
+  setInterval(tick, 5000);
+})();
+</script>
+
+    </main>
+  </div>
+
+<script>
+/*
+ * Give every table cell the name of its column.
+ *
+ * On a phone each row is rendered as a small card and the header row is
+ * hidden, so a bare value like "6251" means nothing without its label. Doing
+ * it here rather than in the views means a new table is handled the moment it
+ * is written, and nobody has to keep duplicate column names in sync.
+ *
+ * It also runs after the live dashboard replaces rows, via the observer
+ * below, so rows that appear after load are labelled too.
+ */
+(function () {
+  function label(table) {
+    var heads = [].map.call(table.querySelectorAll('thead th'), function (th) {
+      return (th.textContent || '').trim();
+    });
+    if (!heads.length) return;
+    [].forEach.call(table.querySelectorAll('tbody tr'), function (tr) {
+      [].forEach.call(tr.children, function (td, i) {
+        if (td.hasAttribute('data-label')) return;
+        var name = heads[i] || '';
+        td.setAttribute('data-label', name);
+        // The trailing column of buttons has no header; mark it so the CSS
+        // can give it the full width instead of a label gutter.
+        if (!name) td.classList.add('cell-actions');
+      });
+    });
+  }
+  function labelAll() { [].forEach.call(document.querySelectorAll('table.tbl'), label); }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    labelAll();
+    // The campaign dashboard rewrites cells every couple of seconds; new
+    // nodes need labelling too, and re-labelling an old one is a no-op.
+    if (window.MutationObserver) {
+      var pending = null;
+      new MutationObserver(function () {
+        clearTimeout(pending);
+        pending = setTimeout(labelAll, 100);
+      }).observe(document.body, { childList: true, subtree: true });
+    }
+  });
+})();
+</script>
+</body>
+</html>
+

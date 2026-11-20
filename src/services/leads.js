@@ -362,13 +362,57 @@ function nextDueAt(listId, { retryAttempts = 1, retryDelayMinutes = 60 } = {}) {
   return soonest;
 }
 
+/**
+ * One page of a list, filtered and sorted, plus what the pager needs.
+ *
+ * Paging happens here rather than in the view because a list can hold tens of
+ * thousands of rows: handing all of them to the template and slicing there
+ * still builds the whole array first, and sending them all to the browser is
+ * what makes the page unusable in the first place.
+ */
+function page(listId, { page = 1, per = 100, status = '', q = '' } = {}) {
+  const all = readRows(listId);
+  let rows = all;
+  if (status) rows = rows.filter((r) => (r.status || 'pending') === status);
+  if (q) {
+    const needle = String(q).replace(/[^\d]/g, '');
+    const text = String(q).toLowerCase();
+    rows = rows.filter((r) => (needle && String(r.phone).includes(needle))
+      || (r.name || '').toLowerCase().includes(text)
+      || (r.company || '').toLowerCase().includes(text));
+  }
+  const total = rows.length;
+  const perPage = Math.max(1, Math.min(500, parseInt(per, 10) || 100));
+  const pages = Math.max(1, Math.ceil(total / perPage));
+  const current = Math.max(1, Math.min(pages, parseInt(page, 10) || 1));
+  const from = (current - 1) * perPage;
+  return {
+    rows: rows.slice(from, from + perPage),
+    page: current, per: perPage, pages, total,
+    from: total ? from + 1 : 0,
+    to: Math.min(from + perPage, total),
+    filtered: total !== all.length,
+    grandTotal: all.length,
+  };
+}
+
+/** Every distinct status in a list, with counts, for the filter. */
+function statusCounts(listId) {
+  const out = {};
+  for (const r of readRows(listId)) {
+    const k = r.status || 'pending';
+    out[k] = (out[k] || 0) + 1;
+  }
+  return out;
+}
+
 function remaining(listId, retryAttempts = 1) {
   return readRows(listId).filter((r) =>
     !['done', 'dnc', 'removed'].includes(r.status) && (r.attempts || 0) <= retryAttempts).length;
 }
 
 module.exports = {
-  nextDueAt,
+  nextDueAt, page, statusCounts,
   DIR, COUNTRIES, list, get, create, update, remove, stats,
   importCSV, readRows, writeRows, normalizePhone,
   dueRows, updateRow, remaining,

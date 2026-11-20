@@ -439,6 +439,23 @@ being readable at two campaigns, and it polled every one of them whether or
 not anyone was looking at it. The index now asks only for status and a live
 count, so it stays cheap however many campaigns exist.
 
+## Exporting a lead list
+
+**Download** on any row of `/leads` writes the list out as CSV with its live
+state: phone, name, company, email, status, attempts, outcome and the time of
+the last attempt. Phone numbers carry a leading apostrophe so Excel keeps the
+`+` and does not read a long number as a float.
+
+On a list's own page the Download button follows the status filter, so
+pulling back just the transferred numbers, or just the opt-outs, is one
+click.
+
+The file is streamed rather than assembled in memory: 200,000 rows exports in
+about a second and the process never holds a second copy of the output.
+
+This is the list's current state. For what happened on each individual call,
+use the campaign's own report instead.
+
 ## Call reports
 
 Every finished campaign call writes one line to

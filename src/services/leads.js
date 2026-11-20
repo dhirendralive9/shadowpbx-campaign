@@ -396,6 +396,41 @@ function page(listId, { page = 1, per = 100, status = '', q = '' } = {}) {
   };
 }
 
+const EXPORT_COLUMNS = [
+  ['phone', 'Phone'], ['name', 'Name'], ['company', 'Company'], ['email', 'Email'],
+  ['status', 'Status'], ['attempts', 'Attempts'], ['outcome', 'Outcome'],
+  ['lastAttempt', 'Last attempt'],
+];
+
+/**
+ * Write the list to a CSV stream.
+ *
+ * Streamed a chunk at a time rather than built as one string: a list here
+ * already runs to 200,000 rows, and holding the whole export in memory to
+ * send it in one go is a spike this box does not need to take. The caller
+ * gets rows as they are produced.
+ */
+function writeCsv(listId, out, { status = '' } = {}) {
+  const esc = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+  out.write('\ufeff' + EXPORT_COLUMNS.map((c) => esc(c[1])).join(',') + '\r\n');
+  const rows = readRows(listId);
+  let buf = '';
+  let written = 0;
+  for (const r of rows) {
+    if (status && (r.status || 'pending') !== status) continue;
+    buf += EXPORT_COLUMNS.map(([k]) => {
+      // A leading apostrophe stops Excel eating the + on an E.164 number and
+      // reading a long one as a float.
+      if (k === 'phone') return esc("'" + (r[k] == null ? '' : r[k]));
+      return esc(r[k]);
+    }).join(',') + '\r\n';
+    written++;
+    if (buf.length > 64 * 1024) { out.write(buf); buf = ''; }
+  }
+  if (buf) out.write(buf);
+  return written;
+}
+
 /** Every distinct status in a list, with counts, for the filter. */
 function statusCounts(listId) {
   const out = {};
@@ -412,7 +447,7 @@ function remaining(listId, retryAttempts = 1) {
 }
 
 module.exports = {
-  nextDueAt, page, statusCounts,
+  nextDueAt, page, statusCounts, writeCsv, EXPORT_COLUMNS,
   DIR, COUNTRIES, list, get, create, update, remove, stats,
   importCSV, readRows, writeRows, normalizePhone,
   dueRows, updateRow, remaining,

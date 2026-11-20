@@ -120,6 +120,8 @@
       <div class="form-group" style="margin:0;grid-column:1/-1">
         <button class="btn btn-sm btn-primary">Apply</button>
         <a class="btn btn-sm" href="/leads/<%= list.id %>">Reset</a>
+        <a class="btn btn-sm" href="/leads/<%= list.id %>/export.csv?status=<%= encodeURIComponent(filter.status) %>">
+          Download<%= filter.status ? ' ' + filter.status : ' all' %></a>
         <label class="muted" style="font-size:11px;margin-left:10px">
           <input type="checkbox" id="auto" checked> Keep this page up to date
         </label>

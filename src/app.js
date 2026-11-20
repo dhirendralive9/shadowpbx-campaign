@@ -141,6 +141,33 @@ app.get('/leads/:id', auth, (req, res) => {
 });
 
 /**
+ * Download a lead list with its live status.
+ *
+ * Streamed, because a list here already runs to 200,000 rows. `?status=` can
+ * narrow it, so pulling just the transferred or opted-out numbers back out is
+ * one click rather than a filter-then-export dance.
+ */
+app.get('/leads/:id/export.csv', auth, (req, res) => {
+  const l = leads.get(req.params.id);
+  if (!l) return res.status(404).send('No such list');
+  const status = req.query.status || '';
+  const slug = String(l.name || 'leads').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const stamp = new Date().toISOString().slice(0, 10);
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition',
+    `attachment; filename="${slug}${status ? '-' + status : ''}-${stamp}.csv"`);
+  try {
+    leads.writeCsv(l.id, res, { status });
+    res.end();
+  } catch (e) {
+    // Headers are already out by this point, so there is no status code left
+    // to send; end the file rather than leaving the download hanging.
+    console.error(`[export ${l.id}] ${e.message}`);
+    res.end();
+  }
+});
+
+/**
  * The same page as JSON, so the table can refresh itself while a campaign
  * runs. Without it the statuses on screen are whatever they were when the
  * page was opened, which is actively misleading during a live run.

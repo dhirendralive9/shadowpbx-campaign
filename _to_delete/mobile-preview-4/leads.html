@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Leads — ShadowPBX Campaign</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="layout">
+    <div class="header-wrap">
+      <header class="header">
+  <div class="brand">
+    <div class="brand-mark"></div>
+    <span class="brand-name">ShadowPBX</span>
+    <span class="brand-tag">Campaign</span>
+  </div>
+  <div class="header-spacer"></div>
+  <div class="header-status"><span class="header-dot"></span> Online</div>
+  <span class="pill p-miss" style="margin-left:12px;font-size:9px">campaign</span>
+  <span class="header-user">campaign</span>
+  <form method="POST" action="/logout" style="display:inline">
+    <button type="submit" class="header-logout" style="background:none;border:none;cursor:pointer;font:inherit;color:inherit;padding:0">Sign out</button>
+  </form>
+</header>
+
+      
+<nav class="tabs">
+  
+    <a href="/" class="tab "><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Overview</a>
+  
+    <a href="/trunks" class="tab "><svg viewBox="0 0 24 24"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 000-7h-11a3.5 3.5 0 010-7H15"/><circle cx="18" cy="5" r="3"/></svg>Trunks</a>
+  
+    <a href="/servers" class="tab "><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>Servers</a>
+  
+    <a href="/audio" class="tab "><svg viewBox="0 0 24 24"><circle cx="5.5" cy="11.5" r="4.5"/><circle cx="18.5" cy="11.5" r="4.5"/><line x1="5.5" y1="16" x2="18.5" y2="16"/></svg>Audio</a>
+  
+    <a href="/ivr" class="tab "><svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></svg>IVR</a>
+  
+    <a href="/leads" class="tab active"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>Leads</a>
+  
+    <a href="/campaigns" class="tab "><svg viewBox="0 0 24 24"><path d="M3 11l18-5v12L3 13v-2z"/><path d="M11.6 16.8a3 3 0 11-5.8-1.6"/></svg>Campaigns</a>
+  
+</nav>
+
+    </div>
+    <main>
+
+
+
+
+
+<div class="section">
+  <div class="sec-head"><div class="sec-title">Lead lists</div>
+    <span class="muted" style="font-size:11px">Each list carries its own country, so numbers normalise correctly</span></div>
+  <div class="card">
+    
+    <table class="tbl"><thead><tr>
+      <th>Name</th><th>Country</th><th>Dial code</th><th>Leads</th><th>Created</th><th></th>
+    </tr></thead><tbody>
+    
+      <tr>
+        <td><strong>German Sells</strong></td>
+        <td>DE</td>
+        <td class="mono">+?</td>
+        <td>726</td>
+        <td class="muted" style="font-size:11px">2026-11-18</td>
+        <td style="text-align:right;white-space:nowrap">
+          <a class="btn btn-sm" href="/leads/a">Open</a>
+          <a class="btn btn-sm" href="/leads/a/export.csv">Download</a>
+          <form class="inline-form" method="post" action="/leads/a/delete"
+                onsubmit="return confirm('Delete list German Sells and all its leads?')">
+            <button class="btn btn-sm btn-danger" type="submit">Delete</button></form>
+        </td>
+      </tr>
+    
+      <tr>
+        <td><strong>German PP TEST</strong></td>
+        <td>DE</td>
+        <td class="mono">+?</td>
+        <td>8671</td>
+        <td class="muted" style="font-size:11px">2026-11-20</td>
+        <td style="text-align:right;white-space:nowrap">
+          <a class="btn btn-sm" href="/leads/b">Open</a>
+          <a class="btn btn-sm" href="/leads/b/export.csv">Download</a>
+          <form class="inline-form" method="post" action="/leads/b/delete"
+                onsubmit="return confirm('Delete list German PP TEST and all its leads?')">
+            <button class="btn btn-sm btn-danger" type="submit">Delete</button></form>
+        </td>
+      </tr>
+    
+      <tr>
+        <td><strong>German Payment Default</strong></td>
+        <td>DE</td>
+        <td class="mono">+?</td>
+        <td>200000</td>
+        <td class="muted" style="font-size:11px">2026-11-20</td>
+        <td style="text-align:right;white-space:nowrap">
+          <a class="btn btn-sm" href="/leads/c">Open</a>
+          <a class="btn btn-sm" href="/leads/c/export.csv">Download</a>
+          <form class="inline-form" method="post" action="/leads/c/delete"
+                onsubmit="return confirm('Delete list German Payment Default and all its leads?')">
+            <button class="btn btn-sm btn-danger" type="submit">Delete</button></form>
+        </td>
+      </tr>
+    
+    </tbody></table>
+    
+  </div>
+</div>
+
+<div class="section">
+  <div class="sec-head"><div class="sec-title">New list</div></div>
+  <div class="card">
+    <form method="post" action="/leads/create">
+      <div class="grid-2">
+        <div class="form-group"><label class="form-label">List name</label>
+          <input class="form-input" name="name" placeholder="German Sales — November" required></div>
+        <div class="form-group"><label class="form-label">Country</label>
+          <select class="form-select" name="country" required>
+            <option value="">Select a country…</option>
+            
+              <option value="DE|Germany">Germany (+DE)</option>
+            
+          </select>
+          <span class="muted" style="font-size:10px">Applied to numbers that have no country code of their own.</span>
+        </div>
+      </div>
+      <button class="btn btn-primary" type="submit">Create list</button>
+    </form>
+  </div>
+</div>
+    </main>
+  </div>
+
+<script>
+/*
+ * Give every table cell the name of its column.
+ *
+ * On a phone each row is rendered as a small card and the header row is
+ * hidden, so a bare value like "6251" means nothing without its label. Doing
+ * it here rather than in the views means a new table is handled the moment it
+ * is written, and nobody has to keep duplicate column names in sync.
+ *
+ * It also runs after the live dashboard replaces rows, via the observer
+ * below, so rows that appear after load are labelled too.
+ */
+(function () {
+  function label(table) {
+    var heads = [].map.call(table.querySelectorAll('thead th'), function (th) {
+      return (th.textContent || '').trim();
+    });
+    if (!heads.length) return;
+    [].forEach.call(table.querySelectorAll('tbody tr'), function (tr) {
+      [].forEach.call(tr.children, function (td, i) {
+        if (td.hasAttribute('data-label')) return;
+        var name = heads[i] || '';
+        td.setAttribute('data-label', name);
+        // The trailing column of buttons has no header; mark it so the CSS
+        // can give it the full width instead of a label gutter.
+        if (!name) td.classList.add('cell-actions');
+      });
+    });
+  }
+  function labelAll() { [].forEach.call(document.querySelectorAll('table.tbl'), label); }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    labelAll();
+    // The campaign dashboard rewrites cells every couple of seconds; new
+    // nodes need labelling too, and re-labelling an old one is a no-op.
+    if (window.MutationObserver) {
+      var pending = null;
+      new MutationObserver(function () {
+        clearTimeout(pending);
+        pending = setTimeout(labelAll, 100);
+      }).observe(document.body, { childList: true, subtree: true });
+    }
+  });
+})();
+</script>
+</body>
+</html>
+

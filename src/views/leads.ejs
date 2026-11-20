@@ -19,6 +19,7 @@
         <td class="muted" style="font-size:11px"><%= l.createdAt.slice(0,10) %></td>
         <td style="text-align:right;white-space:nowrap">
           <a class="btn btn-sm" href="/leads/<%= l.id %>">Open</a>
+          <a class="btn btn-sm" href="/leads/<%= l.id %>/export.csv">Download</a>
           <form class="inline-form" method="post" action="/leads/<%= l.id %>/delete"
                 onsubmit="return confirm('Delete list <%= l.name %> and all its leads?')">
             <button class="btn btn-sm btn-danger" type="submit">Delete</button></form>

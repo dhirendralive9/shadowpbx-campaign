@@ -107,14 +107,25 @@ function recordOutcome(c, rt, phone, job) {
    * limit, and they are then skipped forever.
    */
   if (job.failureKind) {
-    if (entry) {
-      leads.updateRow(c.leadListId, phone, {
-        status: 'pending',
-        attempts: entry.prevAttempts || 0,
-        lastAttempt: entry.prevLastAttempt || null,
-        outcome: '',
-      });
-    }
+    // The refund must not depend on the runtime entry still being there. The
+    // tick sweep can release a slot before the outcome lands, and if that
+    // happens with `if (entry)` guarding the whole thing, the lead silently
+    // keeps an attempt it never received. The attempt count was raised by
+    // exactly one in dialNow, so stepping back one is correct with or without
+    // the entry; the remembered values are used when available because they
+    // also restore the original lastAttempt.
+    const now = leads.readRows(c.leadListId).find((r) => r.phone === phone);
+    const restoredAttempts = entry && entry.prevAttempts != null
+      ? entry.prevAttempts
+      : Math.max(0, ((now && now.attempts) || 1) - 1);
+    leads.updateRow(c.leadListId, phone, {
+      status: 'pending',
+      attempts: restoredAttempts,
+      // Clearing this is what makes the lead due again immediately rather
+      // than sitting out a retry delay for a call that never rang.
+      lastAttempt: entry ? (entry.prevLastAttempt || null) : null,
+      outcome: '',
+    });
     const st = { ...c.stats };
     st.blocked = (st.blocked || 0) + 1;
     // Undo the optimistic increment too: it was not a dial.

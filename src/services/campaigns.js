@@ -42,6 +42,11 @@ const DEFAULT_IVR = {
   // of seconds of silence before the prompt, and will occasionally drop a real
   // lead, so it is off until switched on deliberately.
   detectMachines: false,
+  // Ceiling on the menu portion of one call. The round limits bound how many
+  // prompts play, not how long the call lasts, and a channel held for two
+  // minutes by somebody who pressed nothing is the expensive failure mode on
+  // a trunk with a channel limit. 0 = no ceiling.
+  maxCallSeconds: 90,
 };
 
 const DEFAULT_PACING = {
@@ -119,6 +124,7 @@ function save(data) {
       waitSeconds: clamp(data.waitSeconds, 3, 30, 8),
       agentRingSeconds: clamp(data.agentRingSeconds, 10, 120, 30),
       detectMachines: truthyBox(data.detectMachines),
+      maxCallSeconds: clamp(data.maxCallSeconds, 0, 600, 90),
     },
     pacing: {
       ...DEFAULT_PACING,

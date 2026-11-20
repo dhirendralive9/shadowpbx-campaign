@@ -59,7 +59,10 @@ const DEFAULT_FLOW = {
   keys: [],
   invalidAudio: '',          // "that was not a valid option"
   maxInvalid: 3,             // wrong presses allowed before giving up
-  timeoutSeconds: 30,        // silence after the menu before it counts as no input
+  // Nobody who intends to press 1 takes thirty seconds to do it, and every
+  // second of silence is a trunk channel held open. Existing flows keep
+  // whatever they were saved with.
+  timeoutSeconds: 8,         // silence after the menu before it counts as no input
   noInputAudio: '',          // played when the timeout expires
   maxNoInput: 2,             // how many silent rounds before giving up
   exitAudio: '',             // the last thing they hear before the hangup
@@ -142,7 +145,7 @@ function save(data) {
     keys: parseKeys(data),
     invalidAudio: String(data.invalidAudio || '').trim(),
     maxInvalid: clamp(data.maxInvalid, 1, 10, 3),
-    timeoutSeconds: clamp(data.timeoutSeconds, 5, 120, 30),
+    timeoutSeconds: clamp(data.timeoutSeconds, 5, 120, 8),
     noInputAudio: String(data.noInputAudio || '').trim(),
     maxNoInput: clamp(data.maxNoInput, 1, 5, 2),
     exitAudio: String(data.exitAudio || '').trim(),

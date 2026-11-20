@@ -603,13 +603,42 @@ async function runFlow(job, channel, client) {
   const byKey = new Map(f.keys.map((k) => [k.key, k]));
   let invalid = 0, noInput = 0;
 
+  /**
+   * Hard ceiling on the MENU portion of the call.
+   *
+   * The round limits bound the number of prompts, not the time: a long
+   * greeting plus a 30s silence, twice over, is already past two minutes of a
+   * trunk channel for somebody who pressed nothing. The counters say the call
+   * is behaving; the clock says it is costing a line.
+   *
+   * It covers only the menu. Once a key sends the call to an agent this stops
+   * applying, because cutting off a live conversation to satisfy a dialler
+   * setting would be far worse than the line it saves.
+   */
+  const deadline = job.maxCallSeconds > 0
+    ? job.startedAt + job.maxCallSeconds * 1000 : Infinity;
+
   while (!job.finished) {
+    if (Date.now() >= deadline) {
+      job.path.push('too long');
+      log(job, `Ending: ${job.maxCallSeconds}s in the menu is the limit`);
+      try { await channel.hangup(); } catch (e) {}
+      return finish(job, false,
+        `Ended after ${job.maxCallSeconds}s in the menu without a keypress — `
+        + 'the per-call limit. Lower the flow\'s keypress timeout if this is common.');
+    }
     job._queue.length = 0;                        // only keys pressed from here count
     log(job, `Playing greeting (${f.greetingAudio})`, 'greeting');
     await playInterruptible(job, channel, f.greetingAudio);
     if (job.finished) return;
 
-    const digit = await waitForDigit(job, (f.timeoutSeconds || 30) * 1000);
+    // Without this the state stays 'greeting' for the whole silent wait: every
+    // call reads "playing prompt" however long it has been quiet, and the
+    // dashboard's "waiting for a key" column can never be anything but zero.
+    log(job, `Waiting ${f.timeoutSeconds}s for a keypress`, 'awaiting-key');
+    const budget = Math.max(0, Math.min(
+      (f.timeoutSeconds || 30) * 1000, deadline - Date.now()));
+    const digit = await waitForDigit(job, budget);
 
     if (digit === null) {
       noInput += 1;
@@ -732,6 +761,8 @@ function start(opts) {
     // charge them an attempt for it.
     failureKind: null,              // 'infra' | 'congestion' | null
     detectMachines: !!opts.detectMachines,
+    // 0 = no ceiling. Applies to the menu only, never to a bridged call.
+    maxCallSeconds: Math.max(0, parseInt(opts.maxCallSeconds, 10) || 0),
     amdStatus: '',                  // MACHINE | HUMAN | NOTSURE | TIMEOUT | ERROR
     amdCause: '',
     state: 'connecting',

@@ -313,6 +313,7 @@ function dialNow(c, rt, lead, cfg) {
       routeNumber: cfg.server.routeNumber,
       agentRingSeconds: c.ivr.agentRingSeconds,
       detectMachines: !!c.ivr.detectMachines,
+      maxCallSeconds: c.ivr.maxCallSeconds,
       sound: cfg.flow.greetingAudio,
       meta: { campaignId: c.id, phone: lead.phone },
       onFinish: (finished) => {

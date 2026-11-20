@@ -534,3 +534,139 @@ padding:10px;font-size:11px;max-height:300px;overflow:auto;white-space:pre-wrap;
 .alert-warn{color:#d29922;border-color:rgba(210,153,34,.4);background:rgba(210,153,34,.1)}
 .inline-form{display:inline}
 .w-auto{width:auto;display:inline-block}
+
+/* ══════════════════════════════════════════════════════════════
+   Mobile
+   ──────────────────────────────────────────────────────────────
+   This is an operations console that people check from a phone
+   while a campaign is running, so the phone layout is not a
+   courtesy. The hard part is the tables: eight columns of call
+   stats cannot shrink, they can only push the page wider than
+   the screen and take every other element with them. So below
+   760px each row becomes its own small card with the column name
+   beside each value, and no table is ever laid out as a grid.
+   ══════════════════════════════════════════════════════════════ */
+
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px; }
+
+@media (max-width: 1000px) {
+  .grid-4 { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 760px) {
+  /* Nothing may exceed the viewport. A single wide child drags the
+     whole page sideways and leaves every section clipped. */
+  html, body { max-width: 100%; overflow-x: hidden; }
+  .layout { padding: 0 12px; }
+  main { padding-bottom: 32px; }
+
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; gap: 10px; }
+  .kpi-row { grid-template-columns: 1fr 1fr; }
+  .card { padding: 12px 13px; border-radius: 10px; }
+  .section { margin-bottom: 18px; }
+
+  /* Section headers: title and action stack instead of colliding. */
+  .sec-head, .card-head {
+    flex-direction: column; align-items: flex-start; gap: 8px;
+  }
+  .sec-head > *, .card-head > * { max-width: 100%; }
+
+  /* ── Tables become cards ───────────────────────────────────── */
+  .tbl { display: block; width: 100%; font-size: 14px; }
+  .tbl thead { display: none; }            /* labels move into the cells */
+  .tbl tbody { display: block; width: 100%; }
+  .tbl tbody tr {
+    display: block; width: 100%;
+    background: var(--bg-surface);
+    border: 0.5px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+  }
+  .tbl tbody tr:last-child { margin-bottom: 0; }
+  /* The label is positioned rather than being a flex item. As a flex item it
+     competed with the cell's own content for width, and a cell holding text
+     plus a nested div got squeezed hard enough to hyphenate single words
+     ("Reg-ister"). Out of flow, the content keeps the whole remaining column
+     and wraps only where it genuinely has to. */
+  .tbl tbody td {
+    display: block; position: relative;
+    width: 100%; padding: 5px 0 5px 40%; border: 0;
+    text-align: left !important;
+    min-height: 1.2em;
+  }
+  /* data-label is filled in by the script in foot.ejs from the real table
+     headers, so no view has to repeat its column names. */
+  .tbl tbody td::before {
+    content: attr(data-label);
+    position: absolute; left: 0; top: 7px; width: 36%;
+    font-size: 10px; letter-spacing: 0.4px; text-transform: uppercase;
+    color: var(--text-tertiary); font-weight: 600;
+    line-height: 1.3;
+  }
+  /* Only break things that really cannot fit: phone numbers, sound IDs,
+     hosts. Ordinary words wrap normally. */
+  .tbl tbody td .mono, .tbl tbody td.mono { overflow-wrap: anywhere; }
+  .tbl tbody td:empty { display: none; }
+  .tbl tbody td[data-label=""]::before { display: none; }
+  /* Several views pin their action cell with an inline white-space:nowrap,
+     which keeps a row of buttons on one line and pushes it off the screen.
+     Inline styles need !important to beat. Same for the right-alignment,
+     which looks wrong once a cell is a stacked label/value pair. */
+  .tbl tbody td { white-space: normal !important; }
+
+  /* The actions cell: no label, buttons on their own line, thumb-sized. */
+  .tbl tbody td.cell-actions {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    padding: 10px 0 0; margin-top: 6px;
+    border-top: 0.5px solid var(--border);
+  }
+  .tbl tbody td.cell-actions::before { display: none; }
+  .tbl tbody td.cell-actions .btn,
+  .tbl tbody td.cell-actions form { margin: 0; }
+  .tbl tbody td.cell-actions form { display: inline-flex; }
+
+  /* ── Controls ──────────────────────────────────────────────── */
+  /* 16px stops iOS zooming the whole page when a field is focused. */
+  .form-input, .form-select, textarea { font-size: 16px; padding: 10px 12px; }
+  .btn { padding: 9px 14px; font-size: 14px; }
+  .btn-sm { padding: 8px 12px; font-size: 13px; }
+  .row-flex { gap: 8px; }
+
+  /* Tabs stay on one scrollable line rather than wrapping into a
+     block that pushes the content down the page. */
+  .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tabs::-webkit-scrollbar { height: 2px; }
+  .tabs::-webkit-scrollbar-thumb { background: var(--border); }
+  .tab { padding: 10px 12px; font-size: 13px; }
+
+  /* The header is full-bleed: it cancels the layout padding with a negative
+     margin and re-adds it as its own padding. Those two numbers have to
+     match, and the mobile padding is 12px, not 24px -- left at 24 the header
+     was 24px wider than the page and dragged every view sideways. */
+  .header-wrap {
+    position: sticky; top: 0; z-index: 20; background: var(--bg-page);
+    margin: 0 -12px; padding: 0 12px;
+  }
+  /* The brand, status pills and user name sat on one line and ran off the
+     edge; let them wrap and keep the name from stretching the row. */
+  .header { flex-wrap: wrap; gap: 6px 10px; padding: 10px 0; }
+  .header-user { max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Anything with an explicit pixel width in a style attribute. */
+  [style*="max-width"] { max-width: 100% !important; }
+  pre, code, .mono { overflow-wrap: anywhere; word-break: break-word; }
+  pre { white-space: pre-wrap; }
+
+  /* A row of plain numbers reads fine two-up and saves a whole screen of
+     scrolling; it is the forms that need one column, not these. */
+  .stat-row { grid-template-columns: 1fr 1fr !important; gap: 14px 8px; }
+}
+
+@media (max-width: 420px) {
+  .kpi-row { grid-template-columns: 1fr; }
+  .kpi-val { font-size: 22px; }
+  /* The label is absolutely positioned now, so this is a width, not a basis. */
+  .tbl tbody td { padding-left: 46%; }
+  .tbl tbody td::before { width: 42%; }
+}

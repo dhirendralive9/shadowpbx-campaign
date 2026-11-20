@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Campaigns — ShadowPBX Campaign</title>
+  <link rel="stylesheet" href="../src/public/css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <div class="header-wrap">
+      <header class="header">
+  <div class="brand">
+    <div class="brand-mark"></div>
+    <span class="brand-name">ShadowPBX</span>
+    <span class="brand-tag">Campaign</span>
+  </div>
+  <div class="header-spacer"></div>
+  <div class="header-status"><span class="header-dot"></span> Online</div>
+  <span class="pill p-miss" style="margin-left:12px;font-size:9px">campaign</span>
+  <span class="header-user">[object Object]</span>
+  <form method="POST" action="/logout" style="display:inline">
+    <button type="submit" class="header-logout" style="background:none;border:none;cursor:pointer;font:inherit;color:inherit;padding:0">Sign out</button>
+  </form>
+</header>
+
+      
+<nav class="tabs">
+  
+    <a href="/" class="tab "><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Overview</a>
+  
+    <a href="/trunks" class="tab "><svg viewBox="0 0 24 24"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 000-7h-11a3.5 3.5 0 010-7H15"/><circle cx="18" cy="5" r="3"/></svg>Trunks</a>
+  
+    <a href="/servers" class="tab "><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>Servers</a>
+  
+    <a href="/audio" class="tab "><svg viewBox="0 0 24 24"><circle cx="5.5" cy="11.5" r="4.5"/><circle cx="18.5" cy="11.5" r="4.5"/><line x1="5.5" y1="16" x2="18.5" y2="16"/></svg>Audio</a>
+  
+    <a href="/ivr" class="tab "><svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></svg>IVR</a>
+  
+    <a href="/leads" class="tab "><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>Leads</a>
+  
+    <a href="/campaigns" class="tab active"><svg viewBox="0 0 24 24"><path d="M3 11l18-5v12L3 13v-2z"/><path d="M11.6 16.8a3 3 0 11-5.8-1.6"/></svg>Campaigns</a>
+  
+</nav>
+
+    </div>
+    <main>
+
+
+
+
+
+<div class="section">
+  <div class="sec-head"><div class="sec-title">Campaigns</div>
+    <a class="btn btn-sm btn-primary" href="/campaigns/new">+ New campaign</a></div>
+  <div class="card">
+    
+    <table class="tbl"><thead><tr>
+      <th>Name</th><th>Trunk</th><th>Leads</th><th>Pacing</th><th>Status</th><th>Live</th><th></th>
+    </tr></thead><tbody>
+    
+      <tr>
+        <td><strong>German Sells</strong>
+          <div class="muted" style="font-size:11px">German AP</div></td>
+        <td>GERMAN</td>
+        <td>German 45-70 (6744)</td>
+        <td class="muted" style="font-size:11px">
+          predictive 10×/agent,
+          max 200</td>
+        <td><span class="pill p-ok"
+                 id="st-c1">running</span></td>
+        <td class="mono" style="font-size:11px" id="live-c1">—</td>
+        <td style="text-align:right;white-space:nowrap">
+          
+            <form class="inline-form" method="post" action="/campaigns/c1/pause">
+              <button class="btn btn-sm" type="submit">Pause</button></form>
+          
+          <form class="inline-form" method="post" action="/campaigns/c1/stop"
+                onsubmit="return confirm('Stop German Sells? Calls in progress are dropped.')">
+            <button class="btn btn-sm" type="submit">Stop</button></form>
+          <a class="btn btn-sm" href="/campaigns/c1">Edit</a>
+          <a class="btn btn-sm" href="/campaigns/c1/report">Report</a>
+          <form class="inline-form" method="post" action="/campaigns/c1/reset-stats"
+                onsubmit="return confirm('Reset the counters for German Sells?')">
+            <button class="btn btn-sm" type="submit">Reset stats</button></form>
+          <form class="inline-form" method="post" action="/campaigns/c1/delete"
+                onsubmit="return confirm('Delete campaign German Sells?')">
+            <button class="btn btn-sm btn-danger" type="submit">Delete</button></form>
+        </td>
+      </tr>
+    
+    </tbody></table>
+    
+  </div>
+</div>
+
+
+<div class="section" data-dash="c1">
+  <div class="sec-head"><div class="sec-title">German Sells — live</div>
+    <span class="muted" style="font-size:11px" id="note-c1"></span></div>
+
+  <div class="kpi-row">
+    <div class="kpi"><div class="kpi-top"><span class="kpi-label">Agents free</span></div>
+      <div class="kpi-val" id="ag-free-c1">—</div>
+      <div class="kpi-sub" id="ag-sub-c1">on the queue</div></div>
+    <div class="kpi"><div class="kpi-top"><span class="kpi-label">Agents on a call</span></div>
+      <div class="kpi-val" id="ag-busy-c1">—</div>
+      <div class="kpi-sub">busy right now</div></div>
+    <div class="kpi"><div class="kpi-top"><span class="kpi-label">Calls live</span></div>
+      <div class="kpi-val" id="k-live-c1">—</div>
+      <div class="kpi-sub" id="k-cap-c1">of the concurrency ceiling</div></div>
+    <div class="kpi"><div class="kpi-top"><span class="kpi-label">Leads left</span></div>
+      <div class="kpi-val" id="k-left-c1">—</div>
+      <div class="kpi-sub">still dialable</div></div>
+  </div>
+
+  <div class="card">
+    <table class="tbl"><thead><tr>
+      <th>Ringing the lead</th><th>In the menu</th><th>Waiting for a key</th>
+      <th>Ringing an agent</th><th>Talking to an agent</th><th>Placed this hour</th>
+    </tr></thead><tbody><tr>
+      <td class="mono" id="s-dial-c1">—</td>
+      <td class="mono" id="s-greet-c1">—</td>
+      <td class="mono" id="s-key-c1">—</td>
+      <td class="mono" id="s-agent-c1">—</td>
+      <td class="mono" id="s-bridged-c1">—</td>
+      <td class="mono" id="s-hour-c1">—</td>
+    </tr></tbody></table>
+  </div>
+
+  <div class="card" style="margin-top:10px">
+    <table class="tbl"><thead><tr>
+      <th>Dialled</th><th>Heard the prompt</th><th>Pressed something</th>
+      <th>Transferred</th><th>Opted out</th><th>No keypress</th><th>Machines</th><th>Never connected</th>
+    </tr></thead><tbody><tr>
+      <td class="mono" id="t-dialed-c1">—</td>
+      <td class="mono" id="t-heard-c1">—</td>
+      <td class="mono" id="t-answered-c1">—</td>
+      <td class="mono" id="t-conf-c1">—</td>
+      <td class="mono" id="t-opt-c1">—</td>
+      <td class="mono" id="t-nokey-c1">—</td>
+      <td class="mono" id="t-mach-c1">—</td>
+      <td class="mono" id="t-failed-c1">—</td>
+    </tr></tbody></table>
+    <div class="muted" style="font-size:11px;margin-top:8px" id="t-why-c1"></div>
+
+    <!-- Counters say how many calls are up; these say WHICH numbers, and how
+         the last few ended. That is what someone watching a running campaign
+         is actually looking for. -->
+    <div class="grid-2" style="margin-top:16px">
+      <div>
+        <div class="form-label">On the phone now
+          <span class="muted" style="font-weight:400;font-size:11px;margin-left:6px"
+                id="cps-c1"></span></div>
+        <div id="now-c1" class="muted" style="font-size:12px">—</div>
+      </div>
+      <div>
+        <div class="form-label">Just finished
+          <a style="font-weight:400;font-size:11px;margin-left:6px"
+             href="/campaigns/c1/report">full report →</a></div>
+        <div id="recent-c1" class="muted" style="font-size:12px">—</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<script>
+var CAMPAIGN_IDS = ["c1"];
+var CEILINGS = {"c1":200};
+
+function put(id, v){ var el=document.getElementById(id); if(el) el.textContent = v; }
+var STATE_WORDS={queued:'waiting its turn',dialing:'dialling',ringing:'ringing',answered:'answered',
+  greeting:'playing prompt',playing:'playing prompt','awaiting-key':'waiting for a key',
+  key:'waiting for a key','ringing-agent':'ringing agent',bridged:'with an agent',done:'done'};
+
+function refreshCampaign(id){
+  fetch('/api/campaigns/'+id+'/live',{credentials:'same-origin'})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      // Say so, rather than leaving every counter on a dash. A blank
+      // dashboard is indistinguishable from a campaign that has quietly
+      // stopped dialling, and that ambiguity costs real time to diagnose.
+      if(!d.ok){
+        put('note-'+id, d.error ? ('Dashboard error: '+d.error)
+                                : 'Dashboard could not read this campaign.');
+        return;
+      }
+      var pill=document.getElementById('st-'+id);
+      if(pill){ pill.textContent=d.status;
+        pill.className='pill '+(d.status==='running'?'p-ok':(d.status==='paused'?'p-warn':'p-gray')); }
+
+      put('live-'+id, d.live ? d.live+' live' : '—');
+      // Stale agent data is not zero agents; say which it is, because one is a
+      // quiet campaign and the other is a broken feed.
+      put('ag-free-'+id, d.agentsFresh ? d.agentsAvailable : '?');
+      // Three different states, three different things to do about them:
+      // live, running on a reading a few seconds old, or genuinely dark.
+      var age = d.agentAgeMs == null ? null : Math.round(d.agentAgeMs/1000);
+      put('ag-sub-'+id,
+        !d.agentsFresh ? (d.agentNote || 'no data from the PBX')
+          : (d.agentTransport === 'ws' && age !== null && age < 3
+              ? 'of '+d.agentsTotal+' on the queue · live'
+              : 'of '+d.agentsTotal+' on the queue · '+(age===null?'':age+'s ago')));
+      put('ag-busy-'+id, d.agentsFresh ? d.agentsOnCall : '?');
+      put('k-live-'+id, d.live);
+      put('k-cap-'+id, 'ceiling '+(CEILINGS[id]||'—'));
+      put('k-left-'+id, d.remaining);
+      put('s-dial-'+id, d.dialing);
+      put('s-greet-'+id, d.greeting);
+      put('s-key-'+id, d.awaitingKey);
+      put('s-agent-'+id, d.ringingAgent);
+      put('s-bridged-'+id, d.bridged);
+      put('s-hour-'+id, d.placedThisHour);
+      var s=d.stats||{};
+      put('t-dialed-'+id, s.dialed||0); put('t-heard-'+id, s.heardPrompt||0);
+      put('t-answered-'+id, s.answered||0); put('t-conf-'+id, s.confirmed||0);
+      put('t-opt-'+id, s.optedOut||0); put('t-nokey-'+id, s.noKeypress||0);
+      put('t-mach-'+id, s.machines||0);
+      put('t-failed-'+id, s.failed||0);
+      put('t-why-'+id, (s.failed && s.lastFailure)
+        ? 'Last failure: '+s.lastFailure : '');
+      put('note-'+id, d.note||'');
+
+      // Live numbers. Built as text nodes rather than innerHTML: a phone
+      // number is data from a lead file, and it is not going to be the thing
+      // that injects markup into this page.
+      // Configured rate next to the rate actually achieved. A limit that is
+      // being ignored shows up here immediately instead of as mystery
+      // congestion hours later.
+      put('cps-'+id, d.cps
+        ? ('· limit '+d.cps+'/s, last second: '+(d.dialedLastSecond||0))
+        : '· no CPS limit set');
+
+      var now=document.getElementById('now-'+id);
+      if(now){
+        now.textContent='';
+        var lc=d.liveCalls||[];
+        if(!lc.length) now.textContent='Nothing in flight.';
+        lc.slice(0,12).forEach(function(call){
+          var row=document.createElement('div');
+          row.style.cssText='display:flex;justify-content:space-between;padding:2px 0';
+          var a=document.createElement('span'); a.className='mono'; a.textContent=call.phone;
+          var b=document.createElement('span');
+          b.textContent=STATE_WORDS[call.state]||call.state;
+          b.textContent+=' · '+call.seconds+'s';
+          row.appendChild(a); row.appendChild(b); now.appendChild(row);
+        });
+        if(lc.length>12){
+          var more=document.createElement('div');
+          more.textContent='+'+(lc.length-12)+' more';
+          now.appendChild(more);
+        }
+      }
+
+      var rec=document.getElementById('recent-'+id);
+      if(rec){
+        rec.textContent='';
+        var rr=d.recent||[];
+        if(!rr.length) rec.textContent='No calls recorded yet.';
+        rr.slice(0,10).forEach(function(r){
+          var row=document.createElement('div');
+          row.style.cssText='display:flex;justify-content:space-between;padding:2px 0';
+          var a=document.createElement('span'); a.className='mono'; a.textContent=r.phone;
+          var b=document.createElement('span');
+          b.textContent=r.label||r.outcome;
+          if(r.outcome==='transferred') b.style.color='var(--ok,#2ecc71)';
+          else if(r.outcome==='failed'||r.outcome==='no-answer') b.style.color='var(--bad,#e74c3c)';
+          row.appendChild(a); row.appendChild(b); rec.appendChild(row);
+        });
+      }
+    }).catch(function(){
+      put('note-'+id,
+        'Dashboard is not reaching the server — the campaign itself may still be dialling.');
+    });
+}
+function loop(){ CAMPAIGN_IDS.forEach(refreshCampaign); setTimeout(loop, 2000); }
+loop();
+</script>
+    </main>
+  </div>
+
+<script>
+/*
+ * Give every table cell the name of its column.
+ *
+ * On a phone each row is rendered as a small card and the header row is
+ * hidden, so a bare value like "6251" means nothing without its label. Doing
+ * it here rather than in the views means a new table is handled the moment it
+ * is written, and nobody has to keep duplicate column names in sync.
+ *
+ * It also runs after the live dashboard replaces rows, via the observer
+ * below, so rows that appear after load are labelled too.
+ */
+(function () {
+  function label(table) {
+    var heads = [].map.call(table.querySelectorAll('thead th'), function (th) {
+      return (th.textContent || '').trim();
+    });
+    if (!heads.length) return;
+    [].forEach.call(table.querySelectorAll('tbody tr'), function (tr) {
+      [].forEach.call(tr.children, function (td, i) {
+        if (td.hasAttribute('data-label')) return;
+        var name = heads[i] || '';
+        td.setAttribute('data-label', name);
+        // The trailing column of buttons has no header; mark it so the CSS
+        // can give it the full width instead of a label gutter.
+        if (!name) td.classList.add('cell-actions');
+      });
+    });
+  }
+  function labelAll() { [].forEach.call(document.querySelectorAll('table.tbl'), label); }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    labelAll();
+    // The campaign dashboard rewrites cells every couple of seconds; new
+    // nodes need labelling too, and re-labelling an old one is a no-op.
+    if (window.MutationObserver) {
+      var pending = null;
+      new MutationObserver(function () {
+        clearTimeout(pending);
+        pending = setTimeout(labelAll, 100);
+      }).observe(document.body, { childList: true, subtree: true });
+    }
+  });
+})();
+</script>
+</body>
+</html>
+

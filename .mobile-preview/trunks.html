@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trunks — ShadowPBX Campaign</title>
+  <link rel="stylesheet" href="../src/public/css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <div class="header-wrap">
+      <header class="header">
+  <div class="brand">
+    <div class="brand-mark"></div>
+    <span class="brand-name">ShadowPBX</span>
+    <span class="brand-tag">Campaign</span>
+  </div>
+  <div class="header-spacer"></div>
+  <div class="header-status"><span class="header-dot"></span> Online</div>
+  <span class="pill p-miss" style="margin-left:12px;font-size:9px">campaign</span>
+  <span class="header-user">[object Object]</span>
+  <form method="POST" action="/logout" style="display:inline">
+    <button type="submit" class="header-logout" style="background:none;border:none;cursor:pointer;font:inherit;color:inherit;padding:0">Sign out</button>
+  </form>
+</header>
+
+      
+<nav class="tabs">
+  
+    <a href="/" class="tab "><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Overview</a>
+  
+    <a href="/trunks" class="tab active"><svg viewBox="0 0 24 24"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 000-7h-11a3.5 3.5 0 010-7H15"/><circle cx="18" cy="5" r="3"/></svg>Trunks</a>
+  
+    <a href="/servers" class="tab "><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>Servers</a>
+  
+    <a href="/audio" class="tab "><svg viewBox="0 0 24 24"><circle cx="5.5" cy="11.5" r="4.5"/><circle cx="18.5" cy="11.5" r="4.5"/><line x1="5.5" y1="16" x2="18.5" y2="16"/></svg>Audio</a>
+  
+    <a href="/ivr" class="tab "><svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></svg>IVR</a>
+  
+    <a href="/leads" class="tab "><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>Leads</a>
+  
+    <a href="/campaigns" class="tab "><svg viewBox="0 0 24 24"><path d="M3 11l18-5v12L3 13v-2z"/><path d="M11.6 16.8a3 3 0 11-5.8-1.6"/></svg>Campaigns</a>
+  
+</nav>
+
+    </div>
+    <main>
+
+
+
+
+
+<div class="section">
+  <div class="sec-head"><div class="sec-title">SIP Trunks</div>
+    <span class="muted" style="font-size:11px">3 saved — the active one places calls</span></div>
+  <div class="card">
+    
+    <table class="tbl"><thead><tr>
+      <th>Name</th><th>Host</th><th>Username</th><th>Transport</th><th>Auth</th><th>Status</th><th></th>
+    </tr></thead><tbody>
+    
+      <tr>
+        <td><strong>SUII VOIP</strong> </td>
+        <td class="mono">sip.suii.us:5060</td>
+        <td class="mono">dhirendra9live1</td>
+        <td>UDP</td>
+        <td>Password
+          <div class="muted" style="font-size:10px">From:
+            dhirendra9live1
+            &nbsp;·&nbsp; Dials:
+            +15551234567</div></td>
+        <td><span class="pill p-gray" data-reg="trunk-t1"
+                 data-mode="ip">—</span></td>
+        <td style="text-align:right;white-space:nowrap">
+          <button class="btn btn-sm" onclick="editTrunk('t1')">Edit</button>
+          <button class="btn btn-sm" onclick="openTest('t1','SUII VOIP')">Test call</button>
+          <button class="btn btn-sm" onclick="diagnose('t1','SUII VOIP')">Diagnose</button>
+          
+          
+            <form class="inline-form" method="post" action="/trunks/t1/activate">
+              <button class="btn btn-sm" type="submit">Use this</button></form>
+          
+          <form class="inline-form" method="post" action="/trunks/t1/delete"
+                onsubmit="return confirm('Delete trunk SUII VOIP?')">
+            <button class="btn btn-sm btn-danger" type="submit">Delete</button></form>
+        </td>
+      </tr>
+    
+      <tr>
+        <td><strong>GERMAN</strong> </td>
+        <td class="mono">81.181.198.163:5060</td>
+        <td class="mono">2700</td>
+        <td>UDP</td>
+        <td>Register
+          <div class="muted" style="font-size:10px">From:
+            2700
+            &nbsp;·&nbsp; Dials:
+            15551234567</div></td>
+        <td><span class="pill p-gray" data-reg="trunk-t2"
+                 data-mode="register">—</span></td>
+        <td style="text-align:right;white-space:nowrap">
+          <button class="btn btn-sm" onclick="editTrunk('t2')">Edit</button>
+          <button class="btn btn-sm" onclick="openTest('t2','GERMAN')">Test call</button>
+          <button class="btn btn-sm" onclick="diagnose('t2','GERMAN')">Diagnose</button>
+          
+            <button class="btn btn-sm" onclick="reReg('t2', this)">Re-register</button>
+          
+          
+            <form class="inline-form" method="post" action="/trunks/t2/activate">
+              <button class="btn btn-sm" type="submit">Use this</button></form>
+          
+          <form class="inline-form" method="post" action="/trunks/t2/delete"
+                onsubmit="return confirm('Delete trunk GERMAN?')">
+            <button class="btn btn-sm btn-danger" type="submit">Delete</button></form>
+        </td>
+      </tr>
+    
+      <tr>
+        <td><strong>SIPUP</strong> <span class="pill p-ok">active</span></td>
+        <td class="mono">sip.sipup.org:5060</td>
+        <td class="mono">13233</td>
+        <td>UDP</td>
+        <td>Register
+          <div class="muted" style="font-size:10px">From:
+            13233
+            &nbsp;·&nbsp; Dials:
+            +15551234567</div></td>
+        <td><span class="pill p-gray" data-reg="trunk-t3"
+                 data-mode="register">—</span></td>
+        <td style="text-align:right;white-space:nowrap">
+          <button class="btn btn-sm" onclick="editTrunk('t3')">Edit</button>
+          <button class="btn btn-sm" onclick="openTest('t3','SIPUP')">Test call</button>
+          <button class="btn btn-sm" onclick="diagnose('t3','SIPUP')">Diagnose</button>
+          
+            <button class="btn btn-sm" onclick="reReg('t3', this)">Re-register</button>
+          
+          
+          <form class="inline-form" method="post" action="/trunks/t3/delete"
+                onsubmit="return confirm('Delete trunk SIPUP?')">
+            <button class="btn btn-sm btn-danger" type="submit">Delete</button></form>
+        </td>
+      </tr>
+    
+    </tbody></table>
+    
+  </div>
+</div>
+
+<div class="section">
+  <div class="sec-head"><div class="sec-title" id="form-title">Add a trunk</div></div>
+  <div class="card">
+    <form method="post" action="/trunks/save" id="trunk-form">
+      <input type="hidden" name="id" id="t-id">
+      <div class="grid-3">
+        <div class="form-group"><label class="form-label">Name</label>
+          <input class="form-input" name="name" id="t-name" placeholder="German VoIP" required></div>
+        <div class="form-group"><label class="form-label">SIP host</label>
+          <input class="form-input" name="host" id="t-host" placeholder="sip.provider.example" required></div>
+        <div class="form-group"><label class="form-label">Username</label>
+          <input class="form-input" name="user" id="t-user" required></div>
+        <div class="form-group"><label class="form-label">Password</label>
+          <input class="form-input" name="pass" id="t-pass" type="password" placeholder="required"></div>
+        <div class="form-group"><label class="form-label">Port</label>
+          <input class="form-input" name="port" id="t-port" type="number" value="5060"></div>
+        <div class="form-group"><label class="form-label">Transport</label>
+          <select class="form-select" name="transport" id="t-transport">
+            <option value="udp">UDP</option><option value="tcp">TCP</option><option value="tls">TLS</option>
+          </select></div>
+        <div class="form-group"><label class="form-label">Caller ID</label>
+          <input class="form-input" name="callerId" id="t-cid" placeholder="4930123456789"></div>
+        <div class="form-group"><label class="form-label">Auth username <span class="muted">(optional)</span></label>
+          <input class="form-input" name="authUser" id="t-authuser" placeholder="same as username">
+          <span class="muted" style="font-size:11px">Only if the provider authenticates under a
+            different ID than the SIP account name. Blank uses the username above. A provider that
+            wants a separate auth ID answers every REGISTER with another <span class="mono">401</span>,
+            and Asterisk then stops trying for good.</span></div>
+
+        <div class="form-group"><label class="form-label">Provider IPs <span class="muted">(optional)</span></label>
+          <input class="form-input" name="matchIps" id="t-match" placeholder="198.51.100.20">
+          <span class="muted" style="font-size:11px">Extra source IPs to accept inbound calls from, if they
+            differ from the SIP host.</span></div>
+      </div>
+      <!-- The hidden field is load-bearing: an unticked checkbox submits nothing,
+           so without it "off" is indistinguishable from "not sent" and
+           registration can never actually be turned off. -->
+      <div class="grid-3">
+        <div class="form-group"><label class="form-label">Identity in the From header</label>
+          <select class="form-select" name="fromUser" id="t-from">
+            <option value="auto">Automatic — account name when authenticating, caller ID when not</option>
+            <option value="user">Always the account username</option>
+            <option value="callerid">Always the caller ID</option>
+          </select>
+          <span class="muted" style="font-size:11px">The usual cause of <span class="mono">403</span>
+            on the INVITE when everything else is right: providers disagree about which they expect,
+            and the wrong one is rejected after the trunk itself is accepted.</span></div>
+
+        <div class="form-group"><label class="form-label">How the number is dialled</label>
+          <select class="form-select" name="numberFormat" id="t-numfmt">
+            <option value="e164">+E.164 — +4917685594635</option>
+            <option value="plain">Digits only — 4917685594635</option>
+            <option value="intl">00 prefix — 004917685594635</option>
+          </select>
+          <span class="muted" style="font-size:11px">The other common cause of an instant
+            rejection. A carrier that wants one format answers the others with
+            <span class="mono">403</span> or <span class="mono">404</span> before it ever rings.</span></div>
+      </div>
+
+      <!-- Defaults to ticked for a new trunk; editTrunk sets it from the record. -->
+      <input type="hidden" name="lineSupport" value="false">
+      <label class="form-label" style="display:flex;align-items:center;gap:8px;margin:10px 0 6px">
+        <input type="checkbox" name="lineSupport" id="t-line" value="true" checked>
+        Line support in the registration</label>
+      <div class="muted" style="font-size:11px;margin-bottom:14px">
+        Adds a <span class="mono">;line=</span> parameter to the Contact so the provider's inbound
+        calls come back on this binding. Inbound is already matched by the provider's IP, so this is
+        optional — and a strict registrar can refuse the extra parameter, usually with a
+        <span class="mono">400</span>. Untick it if a trunk registers everywhere else but not here.</div>
+
+      <input type="hidden" name="register" value="false">
+      <label class="form-label" style="display:flex;align-items:center;gap:8px;margin:10px 0 6px">
+        <input type="checkbox" name="register" id="t-register" value="true" checked> Register with the provider</label>
+      <div class="muted" style="font-size:11px;margin-bottom:16px">
+        Leave this off for an <strong>IP-authenticated</strong> account (your provider may call it
+        “IP to IP”). Those accounts reject REGISTER with a bare 403 however correct the password is —
+        the provider recognises this server by its public IP instead.</div>
+      <button class="btn btn-primary" type="submit">Save trunk</button>
+      <button class="btn" type="button" onclick="resetTrunk()">Cancel</button>
+      <span class="muted" style="font-size:11px;margin-left:8px">Saving rewrites pjsip.conf and reloads PJSIP.</span>
+    </form>
+  </div>
+</div>
+
+<script>
+var TRUNKS = [{"id":"t1","name":"SUII VOIP","host":"sip.suii.us","user":"dhirendra9live1","port":5060,"transport":"udp","register":false,"callerId":"+491515302325","matchIps":"","fromUser":"auto","numberFormat":"e164","lineSupport":true,"authUser":"","hasPass":true},{"id":"t2","name":"GERMAN","host":"81.181.198.163","user":"2700","port":5060,"transport":"udp","register":true,"callerId":"491739259854","matchIps":"","fromUser":"auto","numberFormat":"plain","lineSupport":true,"authUser":"","hasPass":true},{"id":"t3","name":"SIPUP","host":"sip.sipup.org","user":"13233","port":5060,"transport":"udp","register":true,"callerId":"","matchIps":"","fromUser":"auto","numberFormat":"e164","lineSupport":true,"authUser":"","hasPass":true}];
+// "Register" with no password produces a config Asterisk quietly refuses: the
+// registration object never loads, `pjsip show registrations` is empty, and the
+// status pill stays blank with no error anywhere. Catch it at the point someone
+// can still fix it.
+document.addEventListener('DOMContentLoaded', function(){
+  var f = document.getElementById('trunk-form');
+  if (!f) return;
+  f.addEventListener('submit', function(e){
+    var cur = TRUNKS.find(function(x){ return x.id === t_id.value; });
+    var stored = cur ? cur.hasPass : false;
+    if (t_register.checked && !t_pass.value.trim() && !stored) {
+      e.preventDefault();
+      alert('"Register with the provider" needs a password.\n\n'
+          + 'If this provider authenticates by IP ("IP to IP"), untick that box '
+          + 'instead — otherwise Asterisk refuses the registration silently and '
+          + 'the status column stays blank.');
+      t_register.focus();
+    }
+  });
+});
+
+function editTrunk(id){
+  var t = TRUNKS.find(function(x){return x.id===id;}); if(!t) return;
+  t_id.value=t.id; t_name.value=t.name||''; t_host.value=t.host||''; t_user.value=t.user||'';
+  t_port.value=t.port||5060; t_transport.value=t.transport||'udp'; t_cid.value=t.callerId||'';
+  t_register.checked=!!t.register; t_match.value=t.matchIps||'';
+  t_from.value=t.fromUser||'auto';
+  t_numfmt.value=t.numberFormat||'e164';
+  t_line.checked=t.lineSupport!==false;
+  t_authuser.value=t.authUser||'';
+  t_pass.placeholder='•••••••• (unchanged)'; t_pass.value='';
+  document.getElementById('form-title').textContent='Edit trunk — '+(t.name||'');
+  document.getElementById('trunk-form').scrollIntoView({behavior:'smooth'});
+}
+function resetTrunk(){
+  document.getElementById('trunk-form').reset(); t_id.value='';
+  t_pass.placeholder='required';
+  document.getElementById('form-title').textContent='Add a trunk';
+}
+var t_id=document.getElementById('t-id'),t_name=document.getElementById('t-name'),
+ t_host=document.getElementById('t-host'),t_user=document.getElementById('t-user'),
+ t_pass=document.getElementById('t-pass'),t_port=document.getElementById('t-port'),
+ t_transport=document.getElementById('t-transport'),t_cid=document.getElementById('t-cid'),
+ t_register=document.getElementById('t-register'),t_match=document.getElementById('t-match'),
+ t_from=document.getElementById('t-from'),
+ t_numfmt=document.getElementById('t-numfmt'),
+ t_line=document.getElementById('t-line'),
+ t_authuser=document.getElementById('t-authuser');
+// Live status. A registering trunk reports from `pjsip show registrations`;
+// an IP-authenticated one never appears there at all, so its health is the
+// qualify (OPTIONS) result against its AOR instead.
+(function poll(){
+  fetch('/api/status').then(r=>r.json()).then(function(d){
+    if(!d.ok) return;
+    document.querySelectorAll('[data-reg]').forEach(function(el){
+      var name=el.getAttribute('data-reg');
+      if(el.getAttribute('data-mode')==='ip'){
+        var c=(d.status.contacts||[]).find(function(x){return x.aor===name;});
+        if(!c){ el.textContent='no contact'; el.className='pill p-err'; return; }
+        var up=/Avail|NonQual/i.test(c.status);
+        el.textContent=(up?'reachable':'unreachable')+(c.rtt?' · '+c.rtt:'');
+        el.className='pill '+(up?'p-ok':'p-err');
+      } else {
+        var r=(d.status.registrations||[]).find(function(x){return x.name===name;});
+        if(!r){ el.textContent='—'; el.className='pill p-gray'; return; }
+        el.textContent=r.status;
+        el.className='pill '+(/Registered/i.test(r.status)?'p-ok':'p-err');
+      }
+    });
+  }).catch(function(){});
+  setTimeout(poll,5000);
+})();
+</script>
+
+<div class="section" id="test-section" style="display:none">
+  <div class="sec-head"><div class="sec-title" id="test-title">Test call</div>
+    <button class="btn btn-sm" type="button" onclick="document.getElementById('test-section').style.display='none'">Close</button></div>
+  <div class="card">
+    <p class="muted" style="font-size:12px;margin:0 0 12px">
+      Calls a number through this trunk and plays the audio you choose, then waits for a keypress.
+      Answer it yourself and press <strong>1</strong> — that proves the trunk places calls, the audio is
+      audible, and DTMF survives the carrier, which are three separate things that can fail on their own.
+    </p>
+    <input type="hidden" id="test-trunk">
+    <div class="grid-3">
+      <div class="form-group"><label class="form-label">Number to call</label>
+        <input class="form-input" id="test-number" placeholder="4930123456789">
+        <span class="muted" style="font-size:11px">Full number with country code, digits only.</span></div>
+      <div class="form-group"><label class="form-label">Audio to play</label>
+        <select class="form-select" id="test-sound">
+          <option value="">No audio uploaded yet</option>
+          
+        </select>
+        <span class="muted" style="font-size:11px">Upload more on the Audio tab.</span></div>
+      <div class="form-group"><label class="form-label">Wait for a key (seconds)</label>
+        <input class="form-input" id="test-wait" type="number" value="8" min="3" max="30"></div>
+    </div>
+    <button class="btn btn-primary" id="test-go" onclick="runTest()">Place test call</button>
+    <span class="muted" style="font-size:11px;margin-left:8px">Your phone will ring within a few seconds.</span>
+    <div id="test-result" style="margin-top:14px"></div>
+    <pre class="out-pre" id="test-timeline" style="display:none"></pre>
+  </div>
+</div>
+
+<script>
+var testPoll=null;
+function openTest(id,name){
+  if(testPoll){clearTimeout(testPoll);testPoll=null;}
+  var sec=document.getElementById('test-section');
+  sec.style.display='';
+  document.getElementById('test-title').textContent='Test call — '+name;
+  document.getElementById('test-trunk').value=id;
+  document.getElementById('test-result').innerHTML='';
+  document.getElementById('test-timeline').style.display='none';
+  sec.scrollIntoView({behavior:'smooth'});
+}
+function api(url,opts){
+  var ctl=new AbortController(); var t=setTimeout(function(){ctl.abort();},15000);
+  opts=opts||{}; opts.signal=ctl.signal; opts.credentials='same-origin';
+  return fetch(url,opts).then(function(r){
+    clearTimeout(t);
+    if(!/json/.test(r.headers.get('content-type')||'')){
+      throw new Error('server answered '+r.status+(r.redirected?' after redirecting to '+r.url+' (session expired - log in again)':' with a non-JSON page'));
+    }
+    return r.json();
+  }).catch(function(e){
+    clearTimeout(t);
+    throw (e&&e.name==='AbortError')?new Error('no response from the server within 15s'):e;
+  });
+}
+function testFail(msg){
+  var btn=document.getElementById('test-go');
+  btn.disabled=false; btn.textContent='Place test call';
+  document.getElementById('test-result').innerHTML='<div class="alert alert-err">'+msg+'</div>';
+}
+function runTest(){
+  if(testPoll){clearTimeout(testPoll);testPoll=null;}
+  var id=document.getElementById('test-trunk').value;
+  var btn=document.getElementById('test-go');
+  var box=document.getElementById('test-result');
+  var body={number:document.getElementById('test-number').value,
+            sound:document.getElementById('test-sound').value,
+            waitSeconds:document.getElementById('test-wait').value};
+  btn.disabled=true; btn.textContent='Calling…';
+  document.getElementById('test-timeline').style.display='none';
+  box.innerHTML='<div class="alert alert-warn">Placing the call…</div>';
+  api('/api/trunks/'+id+'/test-call',
+      {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+   .then(function(d){
+     if(!d.ok) return testFail(d.error||'The server refused the test call.');
+     pollTest(d.jobId,0,Date.now());
+   })
+   .catch(function(e){ testFail('Could not start the test: '+e.message); });
+}
+function pollTest(jobId,fails,t0){
+  var btn=document.getElementById('test-go');
+  var box=document.getElementById('test-result');
+  var tl=document.getElementById('test-timeline');
+  api('/api/test-call/'+jobId).then(function(d){
+    if(!d.ok) return testFail(d.error||'The test was lost on the server.');
+    tl.style.display='';
+    tl.textContent=(d.events||[]).map(function(e){
+      return '+'+(e.at/1000).toFixed(1)+'s  '+e.text; }).join('\n');
+    tl.scrollTop=tl.scrollHeight;
+    if(d.finished){
+      btn.disabled=false; btn.textContent='Place test call';
+      box.innerHTML='<div class="alert '+(d.passed?'alert-ok':'alert-err')+'">'+d.result+'</div>';
+      testPoll=null; return;
+    }
+    if(Date.now()-t0>180000) return testFail('Gave up waiting after 3 minutes (last state: '+d.state+').');
+    box.innerHTML='<div class="alert alert-warn">'+d.state+'…</div>';
+    testPoll=setTimeout(function(){pollTest(jobId,0,t0);},1000);
+  }).catch(function(e){
+    if(fails>=3) return testFail('Lost contact with the server while waiting for the result: '+e.message);
+    testPoll=setTimeout(function(){pollTest(jobId,fails+1,t0);},1500);
+  });
+}
+</script>
+
+<div class="section" id="diag-section" style="display:none">
+  <div class="sec-head"><div class="sec-title" id="diag-title">Diagnostics</div>
+    <button class="btn btn-sm" type="button" onclick="document.getElementById('diag-section').style.display='none'">Close</button></div>
+  <div class="card">
+    <div id="diag-hint"></div>
+    <div class="form-label" style="margin-top:10px">Registration</div>
+    <pre class="out-pre" id="diag-reg"></pre>
+    <div class="form-label" style="margin-top:10px">SIP exchange</div>
+    <pre class="out-pre" id="diag-sip"></pre>
+  </div>
+</div>
+
+<script>
+function reReg(id, btn){
+  var old=btn.textContent; btn.disabled=true; btn.textContent='…';
+  fetch('/api/trunks/'+id+'/reregister',{method:'POST'}).then(function(r){return r.json();})
+   .then(function(d){ btn.disabled=false; btn.textContent=old;
+     alert(d.ok ? ('Status now: '+d.status) : ('Failed: '+(d.error||'')));
+     location.reload(); })
+   .catch(function(e){ btn.disabled=false; btn.textContent=old; alert(e.message); });
+}
+function diagnose(id, name){
+  var sec=document.getElementById('diag-section');
+  sec.style.display='';
+  document.getElementById('diag-title').textContent='Diagnostics — '+name;
+  document.getElementById('diag-hint').innerHTML='<span class="muted">Forcing a REGISTER and capturing the SIP exchange… (about 4s)</span>';
+  document.getElementById('diag-reg').textContent='';
+  document.getElementById('diag-sip').textContent='';
+  sec.scrollIntoView({behavior:'smooth'});
+  fetch('/api/trunks/'+id+'/diagnose').then(function(r){return r.json();}).then(function(d){
+    if(!d.ok){ document.getElementById('diag-hint').innerHTML='<div class="alert alert-err">'+(d.error||'failed')+'</div>'; return; }
+    document.getElementById('diag-hint').innerHTML = d.hint
+      ? '<div class="alert alert-warn">'+d.hint+'</div>'
+      : '<div class="alert alert-ok">No obvious failure code in the exchange — read the trace below.</div>';
+    document.getElementById('diag-reg').textContent=d.registration||'(no output)';
+    document.getElementById('diag-sip').textContent=d.sip||'(nothing captured — is /var/log/asterisk/full being written?)';
+  }).catch(function(e){
+    document.getElementById('diag-hint').innerHTML='<div class="alert alert-err">'+e.message+'</div>';
+  });
+}
+</script>
+    </main>
+  </div>
+
+<script>
+/*
+ * Give every table cell the name of its column.
+ *
+ * On a phone each row is rendered as a small card and the header row is
+ * hidden, so a bare value like "6251" means nothing without its label. Doing
+ * it here rather than in the views means a new table is handled the moment it
+ * is written, and nobody has to keep duplicate column names in sync.
+ *
+ * It also runs after the live dashboard replaces rows, via the observer
+ * below, so rows that appear after load are labelled too.
+ */
+(function () {
+  function label(table) {
+    var heads = [].map.call(table.querySelectorAll('thead th'), function (th) {
+      return (th.textContent || '').trim();
+    });
+    if (!heads.length) return;
+    [].forEach.call(table.querySelectorAll('tbody tr'), function (tr) {
+      [].forEach.call(tr.children, function (td, i) {
+        if (td.hasAttribute('data-label')) return;
+        var name = heads[i] || '';
+        td.setAttribute('data-label', name);
+        // The trailing column of buttons has no header; mark it so the CSS
+        // can give it the full width instead of a label gutter.
+        if (!name) td.classList.add('cell-actions');
+      });
+    });
+  }
+  function labelAll() { [].forEach.call(document.querySelectorAll('table.tbl'), label); }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    labelAll();
+    // The campaign dashboard rewrites cells every couple of seconds; new
+    // nodes need labelling too, and re-labelling an old one is a no-op.
+    if (window.MutationObserver) {
+      var pending = null;
+      new MutationObserver(function () {
+        clearTimeout(pending);
+        pending = setTimeout(labelAll, 100);
+      }).observe(document.body, { childList: true, subtree: true });
+    }
+  });
+})();
+</script>
+</body>
+</html>
+

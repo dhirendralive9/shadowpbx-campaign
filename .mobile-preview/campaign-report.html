@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Report — German Sells — ShadowPBX Campaign</title>
+  <link rel="stylesheet" href="../src/public/css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <div class="header-wrap">
+      <header class="header">
+  <div class="brand">
+    <div class="brand-mark"></div>
+    <span class="brand-name">ShadowPBX</span>
+    <span class="brand-tag">Campaign</span>
+  </div>
+  <div class="header-spacer"></div>
+  <div class="header-status"><span class="header-dot"></span> Online</div>
+  <span class="pill p-miss" style="margin-left:12px;font-size:9px">campaign</span>
+  <span class="header-user">[object Object]</span>
+  <form method="POST" action="/logout" style="display:inline">
+    <button type="submit" class="header-logout" style="background:none;border:none;cursor:pointer;font:inherit;color:inherit;padding:0">Sign out</button>
+  </form>
+</header>
+
+      
+<nav class="tabs">
+  
+    <a href="/" class="tab "><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Overview</a>
+  
+    <a href="/trunks" class="tab "><svg viewBox="0 0 24 24"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 000-7h-11a3.5 3.5 0 010-7H15"/><circle cx="18" cy="5" r="3"/></svg>Trunks</a>
+  
+    <a href="/servers" class="tab "><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>Servers</a>
+  
+    <a href="/audio" class="tab "><svg viewBox="0 0 24 24"><circle cx="5.5" cy="11.5" r="4.5"/><circle cx="18.5" cy="11.5" r="4.5"/><line x1="5.5" y1="16" x2="18.5" y2="16"/></svg>Audio</a>
+  
+    <a href="/ivr" class="tab "><svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></svg>IVR</a>
+  
+    <a href="/leads" class="tab "><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>Leads</a>
+  
+    <a href="/campaigns" class="tab active"><svg viewBox="0 0 24 24"><path d="M3 11l18-5v12L3 13v-2z"/><path d="M11.6 16.8a3 3 0 11-5.8-1.6"/></svg>Campaigns</a>
+  
+</nav>
+
+    </div>
+    <main>
+
+
+
+
+
+
+<div class="section">
+  <div class="sec-head">
+    <div class="sec-title">Call report — German Sells</div>
+    <div>
+      <a class="btn btn-sm" href="/campaigns/c1">Edit campaign</a>
+      <a class="btn btn-sm" href="/campaigns">All campaigns</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <!-- Dates are the whole filter. A campaign that ran for weeks must not
+         dump everything into the browser because someone clicked Report. -->
+    <form method="get" class="grid-4" style="align-items:end">
+      <div class="form-group"><label class="form-label">From</label>
+        <input class="form-input" type="date" name="from" value="2026-11-20"></div>
+      <div class="form-group"><label class="form-label">To</label>
+        <input class="form-input" type="date" name="to" value="2026-11-20"></div>
+      <div class="form-group"><label class="form-label">Outcome</label>
+        <select class="form-select" name="outcome">
+          <option value="">Everything</option>
+          
+            <option value="transferred" >Transferred to agent</option>
+          
+            <option value="machine" >Answering machine</option>
+          
+            <option value="failed" >Failed to connect</option>
+          
+        </select></div>
+      <div class="form-group"><label class="form-label">Number contains</label>
+        <input class="form-input" name="phone" value="" placeholder="559463"></div>
+      <div class="form-group" style="grid-column:1/-1">
+        <button class="btn btn-primary">Apply</button>
+        <a class="btn" href="/campaigns/c1/report">Reset</a>
+        <a class="btn" style="float:right"
+           href="/campaigns/c1/report.csv?from=2026-11-20&to=2026-11-20&outcome=&phone=">
+          Download CSV</a>
+        <span class="muted" style="font-size:11px;float:right;margin:8px 12px 0 0">
+          The CSV has every matching row, not just the ones shown.</span>
+      </div>
+    </form>
+  </div>
+
+  
+    <div class="muted" style="font-size:11px;margin:-6px 0 14px">
+      Days with calls:
+      
+        <a href="/campaigns/c1/report?from=2026-11-20&to=2026-11-20"
+           style="margin-right:8px">2026-11-20</a>
+      
+        <a href="/campaigns/c1/report?from=2026-11-19&to=2026-11-19"
+           style="margin-right:8px">2026-11-19</a>
+      
+      
+    </div>
+  
+
+  <div class="card">
+    <div class="grid-4 stat-row" style="text-align:center">
+      <div><div style="font-size:26px"><strong>3</strong></div>
+        <div class="muted" style="font-size:11px">calls</div></div>
+      <div><div style="font-size:26px"><strong>2</strong></div>
+        <div class="muted" style="font-size:11px">connected · 67%</div></div>
+      <div><div style="font-size:26px"><strong>1</strong></div>
+        <div class="muted" style="font-size:11px">transferred · 33%</div></div>
+      <div><div style="font-size:26px"><strong>1</strong></div>
+        <div class="muted" style="font-size:11px">minutes talking</div></div>
+    </div>
+    
+      <div class="muted" style="font-size:11px;margin-top:10px;text-align:center">
+        1 never connected — filter by “Failed to connect” to see why.</div>
+    
+  </div>
+
+  <div class="card">
+    
+    
+    <table class="tbl"><thead><tr>
+      <th>Time</th><th>Number</th><th>Outcome</th><th>Keys</th>
+      <th>Talk</th><th>Total</th><th>Try</th><th>Detail</th>
+    </tr></thead><tbody>
+    
+      <tr>
+        <td class="mono" style="white-space:nowrap">11/20/2026, 12:17:41 PM</td>
+        <td class="mono">+4917685594635</td>
+        <td><span class="pill p-ok">Transferred to agent</span></td>
+        <td class="mono">1</td>
+        <td class="mono">128s</td>
+        <td class="mono">150s</td>
+        <td class="mono">1</td>
+        <td class="muted" style="font-size:11px;max-width:380px">Transferred to agent</td>
+      </tr>
+    
+      <tr>
+        <td class="mono" style="white-space:nowrap">11/20/2026, 12:17:41 PM</td>
+        <td class="mono">+4915775773118</td>
+        <td><span class="pill p-gray">Answering machine</span></td>
+        <td class="mono">—</td>
+        <td class="mono">4s</td>
+        <td class="mono">22s</td>
+        <td class="mono">2</td>
+        <td class="muted" style="font-size:11px;max-width:380px">Answering machine detected</td>
+      </tr>
+    
+      <tr>
+        <td class="mono" style="white-space:nowrap">11/20/2026, 12:17:41 PM</td>
+        <td class="mono">+4917631710883</td>
+        <td><span class="pill p-bad">Failed to connect</span></td>
+        <td class="mono">—</td>
+        <td class="mono">—</td>
+        <td class="mono">0s</td>
+        <td class="mono">1</td>
+        <td class="muted" style="font-size:11px;max-width:380px">Call never connected (hangup cause 34: Circuit/channel congestion) <span class="mono">(cause 34)</span></td>
+      </tr>
+    
+    </tbody></table>
+    
+  </div>
+</div>
+
+    </main>
+  </div>
+
+<script>
+/*
+ * Give every table cell the name of its column.
+ *
+ * On a phone each row is rendered as a small card and the header row is
+ * hidden, so a bare value like "6251" means nothing without its label. Doing
+ * it here rather than in the views means a new table is handled the moment it
+ * is written, and nobody has to keep duplicate column names in sync.
+ *
+ * It also runs after the live dashboard replaces rows, via the observer
+ * below, so rows that appear after load are labelled too.
+ */
+(function () {
+  function label(table) {
+    var heads = [].map.call(table.querySelectorAll('thead th'), function (th) {
+      return (th.textContent || '').trim();
+    });
+    if (!heads.length) return;
+    [].forEach.call(table.querySelectorAll('tbody tr'), function (tr) {
+      [].forEach.call(tr.children, function (td, i) {
+        if (td.hasAttribute('data-label')) return;
+        var name = heads[i] || '';
+        td.setAttribute('data-label', name);
+        // The trailing column of buttons has no header; mark it so the CSS
+        // can give it the full width instead of a label gutter.
+        if (!name) td.classList.add('cell-actions');
+      });
+    });
+  }
+  function labelAll() { [].forEach.call(document.querySelectorAll('table.tbl'), label); }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    labelAll();
+    // The campaign dashboard rewrites cells every couple of seconds; new
+    // nodes need labelling too, and re-labelling an old one is a no-op.
+    if (window.MutationObserver) {
+      var pending = null;
+      new MutationObserver(function () {
+        clearTimeout(pending);
+        pending = setTimeout(labelAll, 100);
+      }).observe(document.body, { childList: true, subtree: true });
+    }
+  });
+})();
+</script>
+</body>
+</html>
+

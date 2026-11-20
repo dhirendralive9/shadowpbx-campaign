@@ -244,6 +244,25 @@ app.get('/api/campaigns/:id/live', auth, (req, res) => {
 });
 
 /**
+ * Live dashboard for ONE campaign.
+ *
+ * The list page used to stack a full live panel per campaign, which stopped
+ * being readable at two and polled every one of them whether or not anyone
+ * was looking. Watching a campaign is its own screen.
+ */
+app.get('/campaigns/:id/live', auth, (req, res) => {
+  const c = campaigns.get(req.params.id);
+  if (!c) return res.redirect('/campaigns?err=' + encodeURIComponent('Campaign not found'));
+  const s = store.load();
+  res.render('campaign-live', base(req, {
+    active: 'campaigns', campaign: c,
+    trunk: (s.trunks || []).find((t) => t.id === c.trunkId) || null,
+    server: (s.servers || []).find((v) => v.id === c.serverId) || null,
+    list: leads.list().find((l) => l.id === c.leadListId) || null,
+  }));
+});
+
+/**
  * Per-call report for one campaign.
  *
  * Defaults to today. The date inputs are the whole filter -- a campaign that

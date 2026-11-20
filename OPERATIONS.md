@@ -426,6 +426,19 @@ timeout to 6-8 seconds on the IVR tab and the same call costs about 25
 seconds instead. Do this before reaching for AMD; it is a larger saving, it
 is exact rather than a guess, and it cannot drop a live lead.
 
+## Watching a running campaign
+
+`/campaigns` is an index: name, trunk, list, pacing, status and how many calls
+are up. **Status** on any row opens that campaign's own live dashboard at
+`/campaigns/<id>/live` — agent counts, where every live call is in the flow,
+the running totals, the numbers currently on the phone and how the last twenty
+ended, refreshed every two seconds.
+
+The list used to stack a full live panel per campaign on one page. That stops
+being readable at two campaigns, and it polled every one of them whether or
+not anyone was looking at it. The index now asks only for status and a live
+count, so it stays cheap however many campaigns exist.
+
 ## Call reports
 
 Every finished campaign call writes one line to

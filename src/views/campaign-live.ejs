@@ -1,0 +1,201 @@
+<%- include('head', { title: campaign.name + ' — live', active: 'campaigns' }) %>
+<%- include('flash') %>
+
+<div class="section">
+  <div class="sec-head">
+    <div>
+      <div class="sec-title"><%= campaign.name %> — live</div>
+      <div class="muted" style="font-size:11px">
+        <%= trunk ? trunk.name : 'trunk missing' %> ·
+        <%= server ? server.name : 'server missing' %> ·
+        <%= list ? list.name : 'list missing' %>
+        <span id="cps-note"></span>
+      </div>
+    </div>
+    <div class="row-flex">
+      <span class="pill <%= campaign.status==='running'?'p-ok':(campaign.status==='paused'?'p-warn':'p-gray') %>"
+            id="st-pill"><%= campaign.status %></span>
+      <% if (campaign.status !== 'running') { %>
+        <form class="inline-form" method="post" action="/campaigns/<%= campaign.id %>/start">
+          <button class="btn btn-sm btn-primary" type="submit">Start</button></form>
+      <% } else { %>
+        <form class="inline-form" method="post" action="/campaigns/<%= campaign.id %>/pause">
+          <button class="btn btn-sm" type="submit">Pause</button></form>
+      <% } %>
+      <form class="inline-form" method="post" action="/campaigns/<%= campaign.id %>/stop"
+            onsubmit="return confirm('Stop <%= campaign.name %>? Calls in progress are dropped.')">
+        <button class="btn btn-sm" type="submit">Stop</button></form>
+      <a class="btn btn-sm" href="/campaigns/<%= campaign.id %>/report">Report</a>
+      <a class="btn btn-sm" href="/campaigns/<%= campaign.id %>">Edit</a>
+      <a class="btn btn-sm" href="/campaigns">All campaigns</a>
+    </div>
+  </div>
+
+  <!-- Anything the dialler wants to say: paused, waiting to retry, agent feed
+       gone quiet. It is the first thing to read when the numbers look wrong. -->
+  <div class="card" id="note-card" style="display:none;margin-bottom:14px">
+    <span class="muted" style="font-size:12px" id="note"></span>
+  </div>
+
+  <div class="kpi-row">
+    <div class="kpi"><div class="kpi-top"><span class="kpi-label">Agents free</span></div>
+      <div class="kpi-val" id="ag-free">—</div>
+      <div class="kpi-sub" id="ag-sub">on the queue</div></div>
+    <div class="kpi"><div class="kpi-top"><span class="kpi-label">Agents on a call</span></div>
+      <div class="kpi-val" id="ag-busy">—</div>
+      <div class="kpi-sub">busy right now</div></div>
+    <div class="kpi"><div class="kpi-top"><span class="kpi-label">Calls live</span></div>
+      <div class="kpi-val" id="k-live">—</div>
+      <div class="kpi-sub" id="k-cap">of the concurrency ceiling</div></div>
+    <div class="kpi"><div class="kpi-top"><span class="kpi-label">Leads left</span></div>
+      <div class="kpi-val" id="k-left">—</div>
+      <div class="kpi-sub">still dialable</div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="sec-head"><div class="sec-title">Where the live calls are</div></div>
+  <div class="card">
+    <table class="tbl"><thead><tr>
+      <th>Ringing the lead</th><th>In the menu</th><th>Waiting for a key</th>
+      <th>Ringing an agent</th><th>Talking to an agent</th><th>Placed this hour</th>
+    </tr></thead><tbody><tr>
+      <td class="mono" id="s-dial">—</td>
+      <td class="mono" id="s-greet">—</td>
+      <td class="mono" id="s-key">—</td>
+      <td class="mono" id="s-agent">—</td>
+      <td class="mono" id="s-bridged">—</td>
+      <td class="mono" id="s-hour">—</td>
+    </tr></tbody></table>
+  </div>
+</div>
+
+<div class="section">
+  <div class="sec-head"><div class="sec-title">Totals since the counters were reset</div>
+    <a class="sec-link" href="/campaigns/<%= campaign.id %>/report">full report →</a></div>
+  <div class="card">
+    <table class="tbl"><thead><tr>
+      <th>Dialled</th><th>Heard the prompt</th><th>Pressed something</th>
+      <th>Transferred</th><th>Opted out</th><th>No keypress</th>
+      <th>Machines</th><th>Not dialled</th><th>Never connected</th>
+    </tr></thead><tbody><tr>
+      <td class="mono" id="t-dialed">—</td>
+      <td class="mono" id="t-heard">—</td>
+      <td class="mono" id="t-answered">—</td>
+      <td class="mono" id="t-conf">—</td>
+      <td class="mono" id="t-opt">—</td>
+      <td class="mono" id="t-nokey">—</td>
+      <td class="mono" id="t-mach">—</td>
+      <td class="mono" id="t-blocked">—</td>
+      <td class="mono" id="t-failed">—</td>
+    </tr></tbody></table>
+    <div class="muted" style="font-size:11px;margin-top:8px" id="t-why"></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="grid-2">
+    <div>
+      <div class="sec-head"><div class="sec-title">On the phone now</div>
+        <span class="muted" style="font-size:11px" id="live-count"></span></div>
+      <div class="card"><div id="now" class="muted" style="font-size:13px">—</div></div>
+    </div>
+    <div>
+      <div class="sec-head"><div class="sec-title">Just finished</div></div>
+      <div class="card"><div id="recent" class="muted" style="font-size:13px">—</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+var CID = <%- JSON.stringify(campaign.id) %>;
+var CEILING = <%- JSON.stringify(campaign.pacing.maxConcurrent) %>;
+var STATE_WORDS = { queued:'waiting its turn', dialing:'dialling', ringing:'ringing',
+  answered:'answered', greeting:'playing prompt', playing:'playing prompt',
+  'awaiting-key':'waiting for a key', key:'waiting for a key',
+  'ringing-agent':'ringing agent', bridged:'with an agent', done:'done' };
+
+function put(id, v){ var el = document.getElementById(id); if (el) el.textContent = v; }
+
+/* Phone numbers come out of a lead file, so rows are built from text nodes
+   rather than innerHTML. */
+function rows(host, items, right, colour) {
+  host.textContent = '';
+  if (!items.length) { host.textContent = '—'; return; }
+  items.forEach(function (it) {
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;justify-content:space-between;gap:12px;padding:3px 0';
+    var a = document.createElement('span'); a.className = 'mono'; a.textContent = it.phone;
+    var b = document.createElement('span');
+    b.style.cssText = 'text-align:right;white-space:nowrap';
+    b.textContent = right(it);
+    var c = colour && colour(it); if (c) b.style.color = c;
+    row.appendChild(a); row.appendChild(b); host.appendChild(row);
+  });
+}
+
+function refresh() {
+  fetch('/api/campaigns/' + CID + '/live', { credentials: 'same-origin' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      var note = document.getElementById('note'), card = document.getElementById('note-card');
+      if (!d.ok) {
+        card.style.display = ''; note.textContent = d.error || 'Could not read this campaign.';
+        return;
+      }
+      var pill = document.getElementById('st-pill');
+      pill.textContent = d.status;
+      pill.className = 'pill ' + (d.status === 'running' ? 'p-ok'
+        : (d.status === 'paused' ? 'p-warn' : 'p-gray'));
+
+      if (d.note) { card.style.display = ''; note.textContent = d.note; }
+      else { card.style.display = 'none'; }
+
+      put('ag-free', d.agentsFresh ? d.agentsAvailable : '?');
+      var age = d.agentAgeMs == null ? null : Math.round(d.agentAgeMs / 1000);
+      put('ag-sub', !d.agentsFresh ? (d.agentNote || 'no data from the PBX')
+        : (d.agentTransport === 'ws' && age !== null && age < 3
+            ? 'of ' + d.agentsTotal + ' on the queue · live'
+            : 'of ' + d.agentsTotal + ' on the queue · ' + (age === null ? '' : age + 's ago')));
+      put('ag-busy', d.agentsFresh ? d.agentsOnCall : '?');
+      put('k-live', d.live);
+      put('k-cap', 'ceiling ' + (CEILING || '—'));
+      put('k-left', d.remaining);
+
+      put('s-dial', d.dialing); put('s-greet', d.greeting); put('s-key', d.awaitingKey);
+      put('s-agent', d.ringingAgent); put('s-bridged', d.bridged); put('s-hour', d.placedThisHour);
+
+      var s = d.stats || {};
+      put('t-dialed', s.dialed || 0);   put('t-heard', s.heardPrompt || 0);
+      put('t-answered', s.answered || 0); put('t-conf', s.confirmed || 0);
+      put('t-opt', s.optedOut || 0);    put('t-nokey', s.noKeypress || 0);
+      put('t-mach', s.machines || 0);   put('t-blocked', s.blocked || 0);
+      put('t-failed', s.failed || 0);
+      put('t-why', (s.failed && s.lastFailure) ? 'Last failure: ' + s.lastFailure : '');
+
+      put('cps-note', d.cps ? ' · ' + d.cps + ' calls/s limit, ' + (d.dialedLastSecond || 0)
+                              + ' placed in the last second' : ' · no CPS limit set');
+      put('live-count', (d.liveCalls || []).length + ' in flight');
+
+      rows(document.getElementById('now'), (d.liveCalls || []).slice(0, 40),
+        function (c) { return (STATE_WORDS[c.state] || c.state) + ' · ' + c.seconds + 's'; });
+      rows(document.getElementById('recent'), (d.recent || []).slice(0, 20),
+        function (r) { return r.label || r.outcome; },
+        function (r) {
+          if (r.outcome === 'transferred') return 'var(--green,#2ecc71)';
+          if (r.outcome === 'failed' || r.outcome === 'no-answer') return 'var(--red,#e74c3c)';
+          return '';
+        });
+    })
+    .catch(function () {
+      var card = document.getElementById('note-card');
+      card.style.display = '';
+      document.getElementById('note').textContent =
+        'Not reaching the server — the campaign itself may still be dialling.';
+    });
+}
+refresh();
+setInterval(refresh, 2000);
+</script>
+
+<%- include('foot') %>

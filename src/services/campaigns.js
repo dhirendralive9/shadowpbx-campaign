@@ -61,9 +61,27 @@ const DEFAULT_PACING = {
 
 function ensure() { fs.mkdirSync(DIR, { recursive: true }); }
 
+/**
+ * Every campaign, with defaults filled in for anything missing.
+ *
+ * The merge is load-bearing, not tidiness. A campaign saved before a setting
+ * existed has no key for it, and `c.pacing.callsPerSecond || 0` then reads as
+ * 0 -- which for CPS means UNCAPPED. So adding a rate limit silently did
+ * nothing to every campaign created before it, and the only way to get the
+ * new default was to open the campaign and press Save. Any future setting
+ * would have had the same hole.
+ */
 function readAll() {
   ensure();
-  try { return JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch (e) { return []; }
+  let raw;
+  try { raw = JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch (e) { return []; }
+  if (!Array.isArray(raw)) return [];
+  return raw.map((c) => ({
+    ...c,
+    ivr: { ...DEFAULT_IVR, ...(c.ivr || {}) },
+    pacing: { ...DEFAULT_PACING, ...(c.pacing || {}) },
+    stats: c.stats || {},
+  }));
 }
 function writeAll(list) {
   ensure();

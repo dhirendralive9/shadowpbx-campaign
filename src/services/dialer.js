@@ -245,7 +245,13 @@ function placeCall(c, rt, lead, cfg, delayMs = 0) {
   // The next tick excludes whatever is in rt.calls; a lead that is scheduled
   // but not yet reserved would be picked up again and dialled twice.
   rt.calls.set(lead.phone, {
-    state: delayMs > 0 ? 'queued' : 'dialing', startedAt: nowSec(), jobId: null,
+    state: delayMs > 0 ? 'queued' : 'dialing',
+    // Reserved now; the clock starts when it actually dials. Timing them from
+    // reservation made every call in a batch report an identical age, which
+    // hid whether the pacing was doing anything at all.
+    queuedAt: nowSec(),
+    startedAt: delayMs > 0 ? null : nowSec(),
+    jobId: null,
   });
 
   if (delayMs > 0) {
@@ -258,7 +264,7 @@ function placeCall(c, rt, lead, cfg, delayMs = 0) {
         return;
       }
       const e = rt.calls.get(lead.phone);
-      if (e) e.state = 'dialing';
+      if (e) { e.state = 'dialing'; e.startedAt = nowSec(); }
       dialNow(live, rt, lead, cfg);
     }, delayMs);
     return;
@@ -268,6 +274,11 @@ function placeCall(c, rt, lead, cfg, delayMs = 0) {
 
 function dialNow(c, rt, lead, cfg) {
   rt.hourWindow.push(nowSec());
+  // Keep the last few seconds of dial times so the dashboard can report the
+  // rate actually achieved, not the one configured.
+  if (!rt.dialLog) rt.dialLog = [];
+  rt.dialLog.push(Date.now());
+  if (rt.dialLog.length > 200) rt.dialLog = rt.dialLog.slice(-100);
 
   // Count the attempt before the call, not after: a crash mid-call must not
   // leave a lead that gets dialled forever.
@@ -398,7 +409,10 @@ function tick(id) {
    * ticks too, not just within one: ten calls at the end of one tick and ten
    * at the start of the next is still twenty in a second.
    */
-  const cps = c.pacing.callsPerSecond || 0;
+  // A missing value must mean "the default", not "uncapped": reading an absent
+  // limit as no limit is how a rate limit quietly stops existing.
+  const cps = c.pacing.callsPerSecond == null
+    ? campaigns.DEFAULT_PACING.callsPerSecond : c.pacing.callsPerSecond;
   const spacing = cps > 0 ? 1000 / cps : 0;
   const now = Date.now();
   if (rt.nextSlotAt == null || rt.nextSlotAt < now) rt.nextSlotAt = now;
@@ -473,8 +487,15 @@ function status(id) {
     liveCalls: [...rt.calls.entries()].map(([phone, e]) => ({
       phone,
       state: e.state || 'dialing',
-      seconds: Math.max(0, Math.round((Date.now() - (e.startedAt || Date.now())) / 1000)),
+      seconds: Math.max(0, Math.round(
+        (Date.now() - (e.startedAt || e.queuedAt || Date.now())) / 1000)),
     })).sort((a, b) => b.seconds - a.seconds),
+    // So the configured rate can be checked against reality rather than
+    // assumed, which is what let a silently-ignored limit run for a day.
+    cps: c ? (c.pacing.callsPerSecond == null
+      ? campaigns.DEFAULT_PACING.callsPerSecond : c.pacing.callsPerSecond) : 0,
+    dialedLastSecond: rt.dialLog
+      ? rt.dialLog.filter((t) => Date.now() - t < 1000).length : 0,
     placedThisHour: placedThisHour(rt),
     agentsAvailable: ag && ag.fresh ? ag.available : 0,
     agentsTotal: ag ? ag.total : 0,

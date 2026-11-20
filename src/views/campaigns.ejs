@@ -109,7 +109,9 @@
          is actually looking for. -->
     <div class="grid-2" style="margin-top:16px">
       <div>
-        <div class="form-label">On the phone now</div>
+        <div class="form-label">On the phone now
+          <span class="muted" style="font-weight:400;font-size:11px;margin-left:6px"
+                id="cps-<%= c.id %>"></span></div>
         <div id="now-<%= c.id %>" class="muted" style="font-size:12px">—</div>
       </div>
       <div>
@@ -183,6 +185,13 @@ function refreshCampaign(id){
       // Live numbers. Built as text nodes rather than innerHTML: a phone
       // number is data from a lead file, and it is not going to be the thing
       // that injects markup into this page.
+      // Configured rate next to the rate actually achieved. A limit that is
+      // being ignored shows up here immediately instead of as mystery
+      // congestion hours later.
+      put('cps-'+id, d.cps
+        ? ('· limit '+d.cps+'/s, last second: '+(d.dialedLastSecond||0))
+        : '· no CPS limit set');
+
       var now=document.getElementById('now-'+id);
       if(now){
         now.textContent='';

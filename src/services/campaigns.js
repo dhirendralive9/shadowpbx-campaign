@@ -134,7 +134,12 @@ function save(data) {
       linesPerAgent: data.strategy === 'predictive'
         ? clamp(data.linesPerAgent, 1, 10, 2) : 1,
       maxConcurrent: clamp(data.maxConcurrent, 1, 200, 5),
-      retryAttempts: clamp(data.retryAttempts, 0, 5, 1),
+      // No low ceiling here on purpose. Different operations have genuinely
+      // different needs -- a recovery desk working a consented list will redial
+      // a number far more times than a cold sales campaign would -- and that
+      // call belongs to whoever runs the campaign, not to this file. 0 means
+      // one attempt and no retries.
+      retryAttempts: clamp(data.retryAttempts, 0, 99, 1),
       retryDelayMinutes: clamp(data.retryDelayMinutes, 5, 1440, 60),
       callsPerHourCap: clamp(data.callsPerHourCap, 0, 100000, 0),
       callsPerSecond: clamp(data.callsPerSecond, 0, 100, 10),

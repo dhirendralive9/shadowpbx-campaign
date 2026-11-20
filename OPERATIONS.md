@@ -241,6 +241,16 @@ Calls that never reached anyone -- infrastructure failures and carrier
 congestion -- are not charged an attempt at all, so they come back round
 immediately rather than waiting out the delay.
 
+**Retry attempts** goes up to 99. Different operations have genuinely
+different needs -- a recovery desk working a consented list redials far more
+than a cold sales campaign -- so the number is the operator's to set. It
+counts redials *after* the first call, so 0 means call once and stop.
+
+Two things worth watching at high values: a number that never answers will
+keep cycling and hold capacity that new leads could use, and the campaign
+cannot reach `done` until every lead is exhausted. Retry delay is the lever
+for both.
+
 **A campaign that has dialled its whole list once stays running and waits.**
 It shows "Waiting to retry — N leads still to call, next one due in about M
 minutes" and starts again when the delay expires. It is only marked `done`

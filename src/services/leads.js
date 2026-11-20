@@ -341,12 +341,34 @@ function updateRow(listId, phone, patch) {
 }
 
 /** How many leads are left to try at all — what a campaign counts down. */
+/**
+ * When the next lead becomes dialable again, or null if none ever will.
+ *
+ * "Nothing to dial right now" and "nothing left to dial" are different
+ * answers and the dialler has to tell them apart: one means wait, the other
+ * means the campaign is finished.
+ */
+function nextDueAt(listId, { retryAttempts = 1, retryDelayMinutes = 60 } = {}) {
+  let soonest = null;
+  for (const r of readRows(listId)) {
+    if (['done', 'dnc', 'removed'].includes(r.status)) continue;
+    const attempts = r.attempts || 0;
+    if (attempts > retryAttempts) continue;
+    if (attempts === 0) return 0;                 // never tried: due now
+    const last = r.lastAttempt ? Date.parse(r.lastAttempt) : 0;
+    const due = last + retryDelayMinutes * 60000;
+    if (soonest === null || due < soonest) soonest = due;
+  }
+  return soonest;
+}
+
 function remaining(listId, retryAttempts = 1) {
   return readRows(listId).filter((r) =>
     !['done', 'dnc', 'removed'].includes(r.status) && (r.attempts || 0) <= retryAttempts).length;
 }
 
 module.exports = {
+  nextDueAt,
   DIR, COUNTRIES, list, get, create, update, remove, stats,
   importCSV, readRows, writeRows, normalizePhone,
   dueRows, updateRow, remaining,

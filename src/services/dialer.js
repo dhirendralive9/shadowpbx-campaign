@@ -390,6 +390,24 @@ function tick(id) {
   });
 
   if (!due.length) {
+    // Nothing due is NOT the same as nothing left. A campaign that has just
+    // dialled everything once has a list full of leads waiting out the retry
+    // delay; marking it done here retired it permanently and no retry ever
+    // happened, which is exactly how "retries are configured but never run"
+    // looks from outside.
+    const nextAt = leads.nextDueAt(c.leadListId, {
+      retryAttempts: c.pacing.retryAttempts,
+      retryDelayMinutes: c.pacing.retryDelayMinutes,
+    });
+    if (nextAt !== null) {
+      if (!rt.calls.size) {
+        const mins = Math.max(0, Math.ceil((nextAt - Date.now()) / 60000));
+        const left = leads.remaining(c.leadListId, c.pacing.retryAttempts);
+        rt.lastError = `Waiting to retry — ${left} lead(s) still to call, `
+          + `next one due in about ${mins} minute${mins === 1 ? '' : 's'}.`;
+      }
+      return;                                     // stay running
+    }
     if (!rt.calls.size) {
       rt.lastError = 'No leads left to dial.';
       campaigns.setStatus(id, 'done');

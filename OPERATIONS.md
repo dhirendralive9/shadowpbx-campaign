@@ -225,6 +225,31 @@ Also check the SIP host is the provider's hostname. A provider portal showing
 your own server's IP under "host" means the IP they accept traffic from, not an
 address to send to.
 
+## Retries
+
+A lead is dialled again when all of these hold:
+
+- its status is not `done` (transferred), `dnc` (opted out) or `removed`
+- its attempt count is within **Retry attempts**
+- **Retry delay** has passed since its last attempt
+
+So failed calls and answering machines *are* retried: both leave the lead as
+`called`, which is a retryable state. Only a transfer, an opt-out or a
+removal takes a number out of the rotation for good.
+
+Calls that never reached anyone -- infrastructure failures and carrier
+congestion -- are not charged an attempt at all, so they come back round
+immediately rather than waiting out the delay.
+
+**A campaign that has dialled its whole list once stays running and waits.**
+It shows "Waiting to retry — N leads still to call, next one due in about M
+minutes" and starts again when the delay expires. It is only marked `done`
+when no lead can ever become due again.
+
+If a campaign was marked `done` before this behaviour existed, its retries
+never ran. Press **Start** on it: the leads are intact and their attempt
+counts are correct, so it picks up the retries from where it left off.
+
 ## CPS — calls per second
 
 Set **Carrier CPS limit** on the campaign to whatever the provider allows.

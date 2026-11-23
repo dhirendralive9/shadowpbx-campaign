@@ -6,3 +6,6 @@ sounds/
 data/
 config/
 mobile-preview/
+
+# Scratch output (previews, renders) -- never committed
+_to_delete/

@@ -385,6 +385,43 @@ charge thousands of numbers an attempt they never received, park each one for
 the retry delay, and eventually exhaust their retries — destroying a list
 without a single phone ringing.
 
+## HTTPS with your own domain
+
+Point an A record at the server, then:
+
+```
+cd /root/shadowpbx-campaign && ./scripts/setup-https.sh
+```
+
+It asks for the domain and an optional email for expiry notices (or pass
+both: `./scripts/setup-https.sh campaign.example.com you@example.com`), and:
+
+1. checks the domain actually resolves to this server before touching anything
+2. installs nginx and certbot only if they are missing
+3. refuses to continue if something other than nginx holds port 80, and opens
+   80/443 in ufw if ufw is active
+4. writes an nginx site proxying the domain to the app, with WebSocket
+   upgrades and long timeouts for big CSV exports
+5. gets a Let's Encrypt certificate, redirects HTTP to HTTPS, and enables
+   automatic renewal with an nginx reload after each one
+6. checks https://domain answers, and only then sets `HOST=127.0.0.1`,
+   `TRUST_PROXY=1` and `COOKIE_SECURE=1` in `.env` and restarts the app
+
+That last step is ordered on purpose. If anything earlier fails, the app is
+left listening exactly where it was, so a failed run can never lock you out.
+If the app does not come back behind nginx, the script restores the previous
+`.env` by itself. Your `.env` is backed up as `.env.bak-<date>` either way.
+
+Safe to run again: it keeps an existing certificate and the HTTPS block
+certbot added, and only does what is missing.
+
+Afterwards the old `http://<ip>:3000` address stops working, because the app
+only listens on 127.0.0.1. SIP on 5060 and RTP on 10000-20000 are untouched.
+
+A Cloudflare-proxied record resolves to Cloudflare rather than this server;
+the script warns and asks before carrying on, since the HTTP challenge still
+works through it.
+
 ## Updating a running server
 
 ```

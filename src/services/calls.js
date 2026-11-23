@@ -230,7 +230,12 @@ const CSV_COLUMNS = [
  * reading a long number as a float.
  */
 function toCsv(rows) {
-  const esc = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+  // See leads.writeCsv: a leading = + - @ is a formula to a spreadsheet.
+  const esc = (v) => {
+    let t = String(v == null ? '' : v);
+    if (/^[=+\-@\t\r]/.test(t)) t = "'" + t;
+    return `"${t.replace(/"/g, '""')}"`;
+  };
   const lines = [CSV_COLUMNS.map((c) => esc(c[1])).join(',')];
   for (const r of rows) {
     lines.push(CSV_COLUMNS.map(([k]) => {

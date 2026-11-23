@@ -50,7 +50,17 @@ function writeIndex(list) {
   return list;
 }
 
-const rowsPath = (id) => path.join(DIR, `${id}.json`);
+/**
+ * Path to a list's rows. The id is validated HERE, at the sink, because ids
+ * arrive from URLs and Express decodes %2F inside a parameter: without this,
+ * POST /leads/..%2F..%2Fconfig%2Fsettings/delete unlinked the module's whole
+ * configuration, and any .json on the box was reachable the same way.
+ */
+const LIST_ID = /^[A-Za-z0-9_-]{1,64}$/;
+const rowsPath = (id) => {
+  if (!LIST_ID.test(String(id || ''))) throw new Error('Invalid list id');
+  return path.join(DIR, `${id}.json`);
+};
 /**
  * Rows, cached in memory.
  *
@@ -67,7 +77,8 @@ const rowsPath = (id) => path.join(DIR, `${id}.json`);
 const rowCache = new Map();                        // id -> { key, rows }
 
 function readRows(id) {
-  const file = rowsPath(id);
+  let file;
+  try { file = rowsPath(id); } catch (e) { return []; }
   let key;
   try {
     const st = fs.statSync(file);
@@ -293,7 +304,11 @@ function update(id, patch) {
   return rec;
 }
 function remove(id) {
-  writeIndex(readIndex().filter((l) => l.id !== id));
+  // Only ever delete a list that exists: the id names a file.
+  const idx = readIndex();
+  if (!idx.some((l) => l.id === id)) return { ok: false, error: 'List not found' };
+  writeIndex(idx.filter((l) => l.id !== id));
+  rowCache.delete(id);
   try { fs.unlinkSync(rowsPath(id)); } catch (e) {}
   return { ok: true };
 }
@@ -411,7 +426,15 @@ const EXPORT_COLUMNS = [
  * gets rows as they are produced.
  */
 function writeCsv(listId, out, { status = '' } = {}) {
-  const esc = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+  // A cell starting with = + - @ (or a tab/CR) is a formula to Excel and
+  // Google Sheets. Names, companies and emails come from imported files, so
+  // "=HYPERLINK(...)" in a name column would run when the export is opened.
+  // A leading apostrophe makes the spreadsheet treat it as text.
+  const esc = (v) => {
+    let t = String(v == null ? '' : v);
+    if (/^[=+\-@\t\r]/.test(t)) t = "'" + t;
+    return `"${t.replace(/"/g, '""')}"`;
+  };
   out.write('\ufeff' + EXPORT_COLUMNS.map((c) => esc(c[1])).join(',') + '\r\n');
   const rows = readRows(listId);
   let buf = '';

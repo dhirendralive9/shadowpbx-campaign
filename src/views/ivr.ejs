@@ -181,10 +181,10 @@
 </div>
 
 <script>
-var ACTIONS = <%- JSON.stringify(actions) %>;
-var AUDIO_OPTIONS = <%- JSON.stringify(files.map(function(f){
+var ACTIONS = <%- safeJson(actions) %>;
+var AUDIO_OPTIONS = <%- safeJson(files.map(function(f){
   return {id:f.soundId, label:f.name + ' (' + f.seconds + 's)'}; })) %>;
-var EXISTING_KEYS = <%- JSON.stringify(editing ? editing.keys : []) %>;
+var EXISTING_KEYS = <%- safeJson(editing ? editing.keys : []) %>;
 
 function opts(sel, blank){
   var h = '<option value="">' + (blank || '— none —') + '</option>';
@@ -195,13 +195,9 @@ function opts(sel, blank){
 }
 /* Server names are typed by whoever set them up and these rows are built with
    innerHTML, so anything going into one is escaped on the way in. */
-function esc(v){
-  return String(v == null ? '' : v)
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
+function esc(v){ return escHtml(v); }
 
-var SERVERS = <%- JSON.stringify((settings.servers||[]).map(function(s){
+var SERVERS = <%- safeJson((settings.servers||[]).map(function(s){
   return { id:s.id, name:s.name, routeNumber:s.routeNumber }; })) %>;
 
 function serverOpts(sel){
@@ -284,7 +280,7 @@ function openFlowTest(id,name){
 function ftFail(msg){
   var b=document.getElementById('ft-go');
   b.disabled=false; b.textContent='Place test call';
-  document.getElementById('ft-result').innerHTML='<div class="alert alert-err">'+msg+'</div>';
+  document.getElementById('ft-result').innerHTML='<div class="alert alert-err">'+escHtml(msg)+'</div>';
 }
 function runFlowTest(){
   if(ftPoll){clearTimeout(ftPoll);ftPoll=null;}
@@ -312,13 +308,13 @@ function pollFlow(jobId,fails,t0){
     tl.scrollTop=tl.scrollHeight;
     if(d.finished){
       b.disabled=false; b.textContent='Place test call';
-      box.innerHTML='<div class="alert '+(d.passed?'alert-ok':'alert-err')+'">'+d.result+'</div>'+
+      box.innerHTML='<div class="alert '+(d.passed?'alert-ok':'alert-err')+'">'+escHtml(d.result)+'</div>'+
         ((d.path&&d.path.length)?'<div class="muted" style="font-size:11px;margin-top:6px">Path: '+
-          d.path.join(' → ')+'</div>':'');
+          escHtml(d.path.join(' → '))+'</div>':'');
       ftPoll=null; return;
     }
-    if(Date.now()-t0>300000) return ftFail('Gave up waiting after 5 minutes (last state: '+d.state+').');
-    box.innerHTML='<div class="alert alert-warn">'+d.state+'…</div>';
+    if(Date.now()-t0>300000) return ftFail('Gave up waiting after 5 minutes (last state: '+escHtml(d.state)+').');
+    box.innerHTML='<div class="alert alert-warn">'+escHtml(d.state)+'…</div>';
     ftPoll=setTimeout(function(){pollFlow(jobId,0,t0);},1000);
   }).catch(function(e){
     if(fails>=3) return ftFail('Lost contact with the server: '+e.message);

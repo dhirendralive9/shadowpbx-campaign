@@ -221,7 +221,14 @@ async function onStasisStart(event, channel) {
     return owner._onAmd(args[2] || 'NOTSURE', args[3] || '');
   }
 
-  if (args[0] !== 'test') return;                 // not ours -- the engine's
+  if (args[0] !== 'test') {
+    // Nothing of ours started this channel: an inbound call landing in a
+    // Stasis context, or a stale reference. Returning without a hangup left
+    // it parked in the app forever, holding a channel -- repeat it and the
+    // trunk's capacity is gone.
+    try { await channel.hangup(); } catch (e) {}
+    return;
+  }
   const job = jobs.get(args[1]);
   if (!job || job.finished) {
     try { await channel.hangup(); } catch (e) {}

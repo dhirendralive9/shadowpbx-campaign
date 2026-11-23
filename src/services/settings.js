@@ -93,6 +93,26 @@ function persist(s) {
 // ---------------------------------------------------------------- trunks
 const truthy = (v) => v === true || v === 'true' || v === 'on' || v === '1' || v === 'yes';
 
+/**
+ * Field shapes for anything written into pjsip.conf.
+ *
+ * The renderer strips line breaks as a last line of defence; these reject
+ * nonsense at the door so it never reaches the file at all, and so the user
+ * hears about a bad host now rather than from a silent failed registration.
+ */
+const HOST = /^[A-Za-z0-9.-]{1,253}$/;            // hostname or IPv4
+const SIP_USER = /^[A-Za-z0-9._+@=-]{1,128}$/;
+const CALLER = /^\+?[0-9]{0,20}$/;
+const IP_LIST = /^[0-9A-Fa-f:.\/,\s]*$/;
+function checkTrunk(t) {
+  if (t.host && !HOST.test(t.host)) return 'SIP host may only contain letters, digits, dots and hyphens.';
+  if (t.user && !SIP_USER.test(t.user)) return 'Username contains characters a SIP account name cannot have.';
+  if (t.authUser && !SIP_USER.test(t.authUser)) return 'Auth username contains characters it cannot have.';
+  if (t.callerId && !CALLER.test(t.callerId)) return 'Caller ID must be digits, optionally starting with +.';
+  if (t.matchIps && !IP_LIST.test(t.matchIps)) return 'Provider IPs must be IP addresses or CIDR ranges, separated by commas.';
+  return null;
+}
+
 function saveTrunk(data) {
   const s = load();
   const clean = {
@@ -140,6 +160,12 @@ function saveTrunk(data) {
     matchIps: (data.matchIps || '').trim(),
     callerId: (data.callerId || '').trim(),
   };
+  const bad = checkTrunk(clean);
+  if (bad) return { ok: false, error: bad };
+  if (/[\r\n]/.test(String(data.pass || ''))) {
+    return { ok: false, error: 'The password cannot contain a line break.' };
+  }
+
   const existing = data.id ? s.trunks.find((t) => t.id === data.id) : null;
   if (existing) {
     // Blank password means "unchanged" — don't wipe a stored secret.
@@ -205,6 +231,14 @@ function saveServer(data) {
     // still far better than none.
     agentPollSeconds: Math.max(5, Math.min(600, parseInt(data.agentPollSeconds, 10) || 60)),
   };
+  if (clean.host && !HOST.test(clean.host)) {
+    return { ok: false, error: 'SIP host may only contain letters, digits, dots and hyphens.' };
+  }
+  for (const u of [clean.apiUrl, clean.wsUrl]) {
+    if (u && !/^(https?|wss?):\/\/[^\s]+$/i.test(u)) {
+      return { ok: false, error: 'API and WebSocket URLs must start with http(s):// or ws(s)://.' };
+    }
+  }
   const existing = data.id ? s.servers.find((x) => x.id === data.id) : null;
   if (existing) {
     if ((data.apiKey || '').trim()) clean.apiKey = data.apiKey.trim();

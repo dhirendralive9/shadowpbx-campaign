@@ -133,7 +133,7 @@
 </div>
 
 <script>
-var TRUNKS = <%- JSON.stringify(settings.trunks.map(function(t){
+var TRUNKS = <%- safeJson(settings.trunks.map(function(t){
   return {id:t.id,name:t.name,host:t.host,user:t.user,port:t.port,transport:t.transport,
           register:t.register,callerId:t.callerId,matchIps:t.matchIps,fromUser:t.fromUser,numberFormat:t.numberFormat,lineSupport:t.lineSupport!==false,authUser:t.authUser,
           hasPass:!!t.pass}; })) %>;
@@ -272,7 +272,7 @@ function api(url,opts){
 function testFail(msg){
   var btn=document.getElementById('test-go');
   btn.disabled=false; btn.textContent='Place test call';
-  document.getElementById('test-result').innerHTML='<div class="alert alert-err">'+msg+'</div>';
+  document.getElementById('test-result').innerHTML='<div class="alert alert-err">'+escHtml(msg)+'</div>';
 }
 function runTest(){
   if(testPoll){clearTimeout(testPoll);testPoll=null;}
@@ -305,11 +305,11 @@ function pollTest(jobId,fails,t0){
     tl.scrollTop=tl.scrollHeight;
     if(d.finished){
       btn.disabled=false; btn.textContent='Place test call';
-      box.innerHTML='<div class="alert '+(d.passed?'alert-ok':'alert-err')+'">'+d.result+'</div>';
+      box.innerHTML='<div class="alert '+(d.passed?'alert-ok':'alert-err')+'">'+escHtml(d.result)+'</div>';
       testPoll=null; return;
     }
-    if(Date.now()-t0>180000) return testFail('Gave up waiting after 3 minutes (last state: '+d.state+').');
-    box.innerHTML='<div class="alert alert-warn">'+d.state+'…</div>';
+    if(Date.now()-t0>180000) return testFail('Gave up waiting after 3 minutes (last state: '+escHtml(d.state)+').');
+    box.innerHTML='<div class="alert alert-warn">'+escHtml(d.state)+'…</div>';
     testPoll=setTimeout(function(){pollTest(jobId,0,t0);},1000);
   }).catch(function(e){
     if(fails>=3) return testFail('Lost contact with the server while waiting for the result: '+e.message);
@@ -347,15 +347,15 @@ function diagnose(id, name){
   document.getElementById('diag-reg').textContent='';
   document.getElementById('diag-sip').textContent='';
   sec.scrollIntoView({behavior:'smooth'});
-  fetch('/api/trunks/'+id+'/diagnose').then(function(r){return r.json();}).then(function(d){
-    if(!d.ok){ document.getElementById('diag-hint').innerHTML='<div class="alert alert-err">'+(d.error||'failed')+'</div>'; return; }
+  fetch('/api/trunks/'+encodeURIComponent(id)+'/diagnose',{method:'POST',credentials:'same-origin'}).then(function(r){return r.json();}).then(function(d){
+    if(!d.ok){ document.getElementById('diag-hint').innerHTML='<div class="alert alert-err">'+escHtml(d.error||'failed')+'</div>'; return; }
     document.getElementById('diag-hint').innerHTML = d.hint
-      ? '<div class="alert alert-warn">'+d.hint+'</div>'
+      ? '<div class="alert alert-warn">'+escHtml(d.hint)+'</div>'
       : '<div class="alert alert-ok">No obvious failure code in the exchange — read the trace below.</div>';
     document.getElementById('diag-reg').textContent=d.registration||'(no output)';
     document.getElementById('diag-sip').textContent=d.sip||'(nothing captured — is /var/log/asterisk/full being written?)';
   }).catch(function(e){
-    document.getElementById('diag-hint').innerHTML='<div class="alert alert-err">'+e.message+'</div>';
+    document.getElementById('diag-hint').innerHTML='<div class="alert alert-err">'+escHtml(e.message)+'</div>';
   });
 }
 </script>

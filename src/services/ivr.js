@@ -112,6 +112,20 @@ const clamp = (v, lo, hi, dflt) => {
  * which is how a browser posts a repeating row. Rows with no digit are blank
  * rows the user added and never filled in; drop them rather than erroring.
  */
+/**
+ * A sound reference must point into our own library.
+ *
+ * Flow audio arrives as free text from a form and is handed to Asterisk as
+ * `sound:<id>`. Asterisk resolves that relative to its sounds directory, so
+ * "../../../../etc/..." asked it to open files well outside the library.
+ * Only `campaign/<name>` from the uploaded set, or nothing, is accepted.
+ */
+const SOUND = /^campaign\/[A-Za-z0-9 _-]{1,64}$/;
+const sound = (v) => {
+  const t = String(v || '').trim();
+  return SOUND.test(t) ? t : '';
+};
+
 function parseKeys(data) {
   const asArray = (v) => (v == null ? [] : Array.isArray(v) ? v : [v]);
   const digits = asArray(data['key[]'] || data.key);
@@ -134,9 +148,9 @@ function parseKeys(data) {
       ...DEFAULT_KEY,
       key,
       label: String(labels[i] || '').trim().slice(0, 40),
-      audio: String(audios[i] || '').trim(),
+      audio: sound(audios[i]),
       action,
-      holdAudio: action === 'transfer' ? String(holdA[i] || '').trim() : '',
+      holdAudio: action === 'transfer' ? sound(holdA[i]) : '',
       holdSeconds: action === 'transfer' ? clamp(holdS[i], 5, 300, 30) : 30,
       serverId: action === 'transfer' ? String(servers[i] || '').trim() : '',
     });
@@ -149,14 +163,14 @@ function save(data) {
   const clean = {
     name: String(data.name || '').trim() || 'Untitled IVR',
     description: String(data.description || '').trim().slice(0, 200),
-    greetingAudio: String(data.greetingAudio || '').trim(),
+    greetingAudio: sound(data.greetingAudio),
     keys: parseKeys(data),
-    invalidAudio: String(data.invalidAudio || '').trim(),
+    invalidAudio: sound(data.invalidAudio),
     maxInvalid: clamp(data.maxInvalid, 1, 10, 3),
     timeoutSeconds: clamp(data.timeoutSeconds, 5, 120, 8),
-    noInputAudio: String(data.noInputAudio || '').trim(),
+    noInputAudio: sound(data.noInputAudio),
     maxNoInput: clamp(data.maxNoInput, 1, 5, 2),
-    exitAudio: String(data.exitAudio || '').trim(),
+    exitAudio: sound(data.exitAudio),
   };
 
   const existing = data.id ? all.find((f) => f.id === data.id) : null;

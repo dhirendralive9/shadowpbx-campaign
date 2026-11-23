@@ -47,17 +47,95 @@ if (!ARI_PASS || ARI_PASS === 'CHANGE_ME_long_random') {
   process.exit(1);
 }
 
+const crypto = require('crypto');
+const fs = require('fs');
+
+/**
+ * The key that signs session cookies.
+ *
+ * It fell back to ARI_PASS, which is also the UI login password: one value
+ * protecting the login, the cookie signature and ARI at once, so anyone who
+ * ever learned the password could mint sessions offline and rotating it meant
+ * rotating everything. Now it is SESSION_SECRET if set, otherwise a random
+ * key generated once and kept on disk with owner-only permissions.
+ */
+function sessionSecret() {
+  if (process.env.SESSION_SECRET && process.env.SESSION_SECRET.length >= 32) {
+    return process.env.SESSION_SECRET;
+  }
+  const file = path.join(__dirname, '../data/.session-secret');
+  try {
+    const v = fs.readFileSync(file, 'utf8').trim();
+    if (v.length >= 32) return v;
+  } catch (e) { /* first run */ }
+  const v = crypto.randomBytes(48).toString('hex');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, v, { mode: 0o600 });
+  return v;
+}
+
 const app = express();
+app.disable('x-powered-by');
+// Behind a TLS-terminating proxy, set TRUST_PROXY=1 so secure cookies and
+// client IPs (used by the login limiter) are read correctly.
+if (process.env.TRUST_PROXY) app.set('trust proxy', 1);
+
+app.use((req, res, next) => {
+  // Clickjacking: nothing here should ever be framed.
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'same-origin');
+  next();
+});
+
+/**
+ * Refuse state-changing requests that come from another site.
+ *
+ * SameSite=Lax already withholds the cookie from cross-site POSTs, but it is
+ * one setting and browsers have differed on it; this is a second, independent
+ * check. A browser always sends Origin on a POST, and Referer when Origin is
+ * absent; if either is present it must be this host.
+ */
+app.use((req, res, next) => {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  const src = req.get('origin') || req.get('referer');
+  if (!src) return next();                       // curl, scripts, older clients
+  let host;
+  try { host = new URL(src).host; } catch (e) { host = ''; }
+  if (host && host === req.get('host')) return next();
+  res.status(403).send('Cross-site request refused');
+});
+
 app.set('view engine', 'ejs');
+
+/**
+ * JSON for embedding inside a <script> block.
+ *
+ * Views did `<%- JSON.stringify(x) %>` in a dozen places. JSON.stringify does
+ * not escape `</script>`, so any value containing it closes the block and
+ * whatever follows runs as page script. In /leads/:id that value was the
+ * search box -- straight from the query string -- which made it a link that
+ * ran script as the logged-in admin. Escaping <, > and & (and the two line
+ * separators JavaScript treats as newlines) keeps the JSON identical in
+ * meaning and inert as markup.
+ */
+app.locals.safeJson = (v) => JSON.stringify(v === undefined ? null : v)
+  .replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026')
+  .replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
 app.set('views', path.join(__dirname, 'views'));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use('/css', express.static(path.join(__dirname, 'public/css')));
 app.use(session({
-  secret: process.env.SESSION_SECRET || ARI_PASS,
+  secret: sessionSecret(),
+  name: 'spc.sid',
   resave: false,
   saveUninitialized: false,
-  cookie: { httpOnly: true, sameSite: 'lax', maxAge: 12 * 3600 * 1000 },
+  // COOKIE_SECURE=1 once this is served over HTTPS. It cannot be on by
+  // default: on plain HTTP the browser would drop the cookie and nobody could
+  // log in.
+  cookie: { httpOnly: true, sameSite: 'lax', secure: !!process.env.COOKIE_SECURE,
+            maxAge: 12 * 3600 * 1000 },
 }));
 
 const upload = multer({
@@ -83,11 +161,46 @@ const back = (to, r) =>
 
 // ---------------------------------------------------------------- auth
 app.get('/login', (req, res) => res.render('login', { error: null }));
+/**
+ * Login.
+ *
+ * - Compared in constant time, so response timing does not leak how much of
+ *   a guess was right.
+ * - Rate limited per client IP. The UI listens on a public address and the
+ *   old 400ms delay only slowed one request at a time; a client firing
+ *   requests in parallel was not slowed at all.
+ * - The session id is regenerated on success, so an id planted before login
+ *   (session fixation) is worthless afterwards.
+ */
+const loginFails = new Map();                    // ip -> { n, until }
+const LOGIN_MAX = 8, LOGIN_WINDOW_MS = 15 * 60 * 1000;
+function sameSecret(a, b) {
+  const x = crypto.createHash('sha256').update(String(a || '')).digest();
+  const y = crypto.createHash('sha256').update(String(b || '')).digest();
+  return crypto.timingSafeEqual(x, y);
+}
 app.post('/login', (req, res) => {
-  if (req.body.username === ARI_USER && req.body.password === ARI_PASS) {
-    req.session.user = req.body.username;
-    return res.redirect('/');
+  const ip = req.ip || 'unknown';
+  const now = Date.now();
+  const rec = loginFails.get(ip);
+  if (rec && rec.until > now && rec.n >= LOGIN_MAX) {
+    const mins = Math.ceil((rec.until - now) / 60000);
+    return res.status(429).render('login',
+      { error: `Too many failed attempts. Try again in ${mins} minute${mins === 1 ? '' : 's'}.` });
   }
+  const okUser = sameSecret(req.body.username, ARI_USER);
+  const okPass = sameSecret(req.body.password, ARI_PASS);
+  if (okUser && okPass) {
+    loginFails.delete(ip);
+    return req.session.regenerate((err) => {
+      if (err) return res.status(500).render('login', { error: 'Could not start a session' });
+      req.session.user = ARI_USER;
+      res.redirect('/');
+    });
+  }
+  const n = rec && rec.until > now ? rec.n + 1 : 1;
+  loginFails.set(ip, { n, until: now + LOGIN_WINDOW_MS });
+  if (loginFails.size > 10000) loginFails.clear();  // bounded under a flood
   setTimeout(() => res.status(401).render('login', { error: 'Invalid credentials' }), 400);
 });
 app.post('/logout', (req, res) => req.session.destroy(() => res.redirect('/login')));
@@ -384,6 +497,7 @@ function trunkWarnings(t) {
 
 app.post('/trunks/save', auth, async (req, res) => {
   const s = store.saveTrunk(req.body);
+  if (s && s.ok === false) return res.redirect(back('/trunks', s));
   const r = await asterisk.applySettings(s);
   if (!r.ok) return res.redirect(back('/trunks', r));
   const saved = (s.trunks || []).find((t) => t.name === (req.body.name || '').trim())
@@ -408,6 +522,7 @@ app.post('/trunks/:id/delete', auth, async (req, res) => {
 // ---------------------------------------------------------------- servers
 app.post('/servers/save', auth, async (req, res) => {
   const s = store.saveServer(req.body);
+  if (s && s.ok === false) return res.redirect(back('/servers', s));
   agents.sync(s);
   const r = await asterisk.applySettings(s);
   if (!r.ok) return res.redirect(back('/servers', r));
@@ -504,11 +619,18 @@ app.get('/api/status', auth, async (req, res) => {
 });
 
 app.post('/api/trunks/:id/reregister', auth, async (req, res) => {
+  if (!trunkExists(req.params.id)) return res.status(404).json({ ok: false, error: 'No such trunk' });
   try { res.json({ ok: true, ...(await asterisk.reRegister(req.params.id)) }); }
   catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
-app.get('/api/trunks/:id/diagnose', auth, async (req, res) => {
+// POST, not GET: it sends a REGISTER and toggles the SIP logger. A GET with
+// side effects is reachable by any top-level navigation, which is exactly
+// how this route was a one-click root shell before the CLI stopped using sh.
+// The trunk must also exist, so the id can only ever name one of ours.
+const trunkExists = (id) => (store.load().trunks || []).some((t) => t.id === id);
+app.post('/api/trunks/:id/diagnose', auth, async (req, res) => {
+  if (!trunkExists(req.params.id)) return res.status(404).json({ ok: false, error: 'No such trunk' });
   try { res.json({ ok: true, ...(await asterisk.diagnoseTrunk(req.params.id)) }); }
   catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
@@ -719,8 +841,10 @@ agents.sync(store.load());
 // its own after a deploy is a dialler nobody trusts.
 dialer.haltAll();
 
-app.listen(PORT, () => {
-  console.log(`ShadowPBX Campaign UI on http://0.0.0.0:${PORT}  (login: ${ARI_USER})`);
+// HOST=127.0.0.1 keeps the UI off the public interface entirely, for when it
+// sits behind a TLS proxy or is reached over a VPN or SSH tunnel.
+app.listen(PORT, process.env.HOST || '0.0.0.0', () => {
+  console.log(`ShadowPBX Campaign UI on http://${process.env.HOST || "0.0.0.0"}:${PORT}  (login: ${ARI_USER})`);
   console.log(`Settings: ${store.FILE}`);
   console.log(`Audio:    ${audio.DIR}`);
 });

@@ -5,6 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= typeof title !== 'undefined' ? title + ' — ' : '' %>ShadowPBX Campaign</title>
   <link rel="stylesheet" href="/css/style.css">
+  <script>
+  /* Escape a value for HTML. Results, errors and names from the server are
+     built into innerHTML in several views; some of that text comes from
+     things people type (trunk and flow names) and some from Asterisk, which
+     echoes what remote SIP peers send. Anything that is data goes through
+     this on the way in. */
+  function escHtml(v){
+    return String(v == null ? '' : v)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+  </script>
 </head>
 <body>
   <div class="layout">

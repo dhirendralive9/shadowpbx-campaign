@@ -160,10 +160,10 @@ settings.servers.forEach(function(sv){ var on = sv.id === settings.activeServerI
 </div>
 
 <script>
-var SERVERS = <%- JSON.stringify(settings.servers.map(function(s){
+var SERVERS = <%- safeJson(settings.servers.map(function(s){
   return {id:s.id,name:s.name,host:s.host,port:s.port,apiUrl:s.apiUrl,wsUrl:s.wsUrl,
           agentPollSeconds:s.agentPollSeconds,routeNumber:s.routeNumber}; })) %>;
-var ACTIVE_SERVER_ID = <%- JSON.stringify(settings.activeServerId || '') %>;
+var ACTIVE_SERVER_ID = <%- safeJson(settings.activeServerId || '') %>;
 var s_id=document.getElementById('s-id'),s_name=document.getElementById('s-name'),
  s_host=document.getElementById('s-host'),s_port=document.getElementById('s-port'),
  s_api=document.getElementById('s-api'),s_key=document.getElementById('s-key'),
@@ -279,7 +279,7 @@ function openRouteTest(id,name,mode){
 function rtFail(msg){
   var b=document.getElementById('rt-go');
   b.disabled=false; b.textContent='Place test call';
-  document.getElementById('rt-result').innerHTML='<div class="alert alert-err">'+msg+'</div>';
+  document.getElementById('rt-result').innerHTML='<div class="alert alert-err">'+escHtml(msg)+'</div>';
 }
 function runRouteTest(){
   if(rtPoll){clearTimeout(rtPoll);rtPoll=null;}
@@ -308,11 +308,11 @@ function pollRoute(jobId,fails,t0){
     tl.scrollTop=tl.scrollHeight;
     if(d.finished){
       b.disabled=false; b.textContent='Place test call';
-      box.innerHTML='<div class="alert '+(d.passed?'alert-ok':'alert-err')+'">'+d.result+'</div>';
+      box.innerHTML='<div class="alert '+(d.passed?'alert-ok':'alert-err')+'">'+escHtml(d.result)+'</div>';
       rtPoll=null; return;
     }
-    if(Date.now()-t0>180000) return rtFail('Gave up waiting after 3 minutes (last state: '+d.state+').');
-    box.innerHTML='<div class="alert alert-warn">'+d.state+'…</div>';
+    if(Date.now()-t0>180000) return rtFail('Gave up waiting after 3 minutes (last state: '+escHtml(d.state)+').');
+    box.innerHTML='<div class="alert alert-warn">'+escHtml(d.state)+'…</div>';
     rtPoll=setTimeout(function(){pollRoute(jobId,0,t0);},1000);
   }).catch(function(e){
     if(fails>=3) return rtFail('Lost contact with the server while waiting: '+e.message);

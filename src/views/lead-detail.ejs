@@ -180,9 +180,9 @@
  * with the size of the list.
  */
 (function () {
-  var LIST = <%- JSON.stringify(list.id) %>;
+  var LIST = <%- safeJson(list.id) %>;
   var Q = { page: <%= pager.page %>, per: <%= pager.per %>,
-            status: <%- JSON.stringify(filter.status) %>, q: <%- JSON.stringify(filter.q) %> };
+            status: <%- safeJson(filter.status) %>, q: <%- safeJson(filter.q) %> };
   var PILL = { pending: 'p-gray', done: 'p-ok', dnc: 'p-warn' };
 
   function cell(text, cls) {

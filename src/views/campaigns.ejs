@@ -18,8 +18,8 @@
       <tr>
         <td><strong><%= c.name %></strong>
           <div class="muted" style="font-size:11px"><%= sv ? sv.name : 'server missing' %></div></td>
-        <td><%- t ? t.name : '<span class="pill p-err">missing</span>' %></td>
-        <td><%- ll ? ll.name + ' (' + ll.total + ')' : '<span class="pill p-err">missing</span>' %></td>
+        <td><% if (t) { %><%= t.name %><% } else { %><span class="pill p-err">missing</span><% } %></td>
+        <td><% if (ll) { %><%= ll.name %> (<%= ll.total %>)<% } else { %><span class="pill p-err">missing</span><% } %></td>
         <td class="muted" style="font-size:11px">
           <%= (c.pacing.strategy || 'power') === 'predictive'
                 ? 'predictive ' + c.pacing.linesPerAgent + '×/agent' : 'power' %>,
@@ -63,7 +63,7 @@
  * stays cheap to poll however many campaigns exist, and a campaign nobody is
  * watching costs almost nothing.
  */
-var CAMPAIGN_IDS = <%- JSON.stringify(campaigns.map(function(c){ return c.id; })) %>;
+var CAMPAIGN_IDS = <%- safeJson(campaigns.map(function(c){ return c.id; })) %>;
 
 function refreshRow(id){
   fetch('/api/campaigns/'+id+'/live',{credentials:'same-origin'})

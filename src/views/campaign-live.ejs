@@ -108,8 +108,8 @@
 </div>
 
 <script>
-var CID = <%- JSON.stringify(campaign.id) %>;
-var CEILING = <%- JSON.stringify(campaign.pacing.maxConcurrent) %>;
+var CID = <%- safeJson(campaign.id) %>;
+var CEILING = <%- safeJson(campaign.pacing.maxConcurrent) %>;
 var STATE_WORDS = { queued:'waiting its turn', dialing:'dialling', ringing:'ringing',
   answered:'answered', greeting:'playing prompt', playing:'playing prompt',
   'awaiting-key':'waiting for a key', key:'waiting for a key',

@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>German Recovery — ShadowPBX Campaign</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="layout">
+    <div class="header-wrap">
+      <header class="header">
+  <div class="brand">
+    <div class="brand-mark"></div>
+    <span class="brand-name">ShadowPBX</span>
+    <span class="brand-tag">Campaign</span>
+  </div>
+  <div class="header-spacer"></div>
+  <div class="header-status"><span class="header-dot"></span> Online</div>
+  <span class="pill p-miss" style="margin-left:12px;font-size:9px">campaign</span>
+  <span class="header-user">u</span>
+  <form method="POST" action="/logout" style="display:inline">
+    <button type="submit" class="header-logout" style="background:none;border:none;cursor:pointer;font:inherit;color:inherit;padding:0">Sign out</button>
+  </form>
+</header>
+
+      
+<nav class="tabs">
+  
+    <a href="/" class="tab "><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Overview</a>
+  
+    <a href="/trunks" class="tab "><svg viewBox="0 0 24 24"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 000-7h-11a3.5 3.5 0 010-7H15"/><circle cx="18" cy="5" r="3"/></svg>Trunks</a>
+  
+    <a href="/servers" class="tab "><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>Servers</a>
+  
+    <a href="/audio" class="tab "><svg viewBox="0 0 24 24"><circle cx="5.5" cy="11.5" r="4.5"/><circle cx="18.5" cy="11.5" r="4.5"/><line x1="5.5" y1="16" x2="18.5" y2="16"/></svg>Audio</a>
+  
+    <a href="/ivr" class="tab "><svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></svg>IVR</a>
+  
+    <a href="/leads" class="tab "><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>Leads</a>
+  
+    <a href="/campaigns" class="tab active"><svg viewBox="0 0 24 24"><path d="M3 11l18-5v12L3 13v-2z"/><path d="M11.6 16.8a3 3 0 11-5.8-1.6"/></svg>Campaigns</a>
+  
+</nav>
+
+    </div>
+    <main>
+
+
+
+
+
+
+<form method="post" action="/campaigns/save">
+<input type="hidden" name="id" value="c1">
+
+<div class="section">
+  <div class="sec-head"><div class="sec-title">Edit campaign</div>
+    <a class="sec-link" href="/campaigns">← All campaigns</a></div>
+  <div class="card">
+    <div class="grid-2">
+      <div class="form-group"><label class="form-label">Campaign name</label>
+        <input class="form-input" name="name" value="German Recovery" placeholder="German Sales" required></div>
+      <div class="form-group"><label class="form-label">Lead list</label>
+        <select class="form-select" name="leadListId" required>
+          <option value="">Select…</option>
+          
+            <option value="l1" selected>German PP — 988 leads (+)</option>
+          
+        </select>
+        
+      </div>
+      <div class="form-group"><label class="form-label">Trunk <span class="muted">(who we dial through)</span></label>
+        <select class="form-select" name="trunkId" required>
+          <option value="">Select…</option>
+          
+            <option value="t1" selected>SIPUP — </option>
+          
+        </select></div>
+      <div class="form-group"><label class="form-label">Default server <span class="muted">(where confirmed leads go)</span></label>
+        <select class="form-select" name="serverId" required>
+          <option value="">Select…</option>
+          
+            <option value="s1" selected>Recovery — route 900100100100</option>
+          
+            <option value="s2" >Sales — route 900200200200</option>
+          
+            <option value="s3" >Support — route 900300300300</option>
+          
+        </select>
+        <span class="muted" style="font-size:10px">Where a keypress lands unless the IVR key names
+          its own department. Set a server per key on the IVR tab and one flow can serve recovery,
+          sales and support; this is the fallback for keys that name none.</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="sec-head"><div class="sec-title">IVR flow</div>
+    <span class="muted" style="font-size:11px">Built once on the IVR tab, reused by any campaign</span></div>
+  <div class="card">
+    
+    <div class="grid-2">
+      <div class="form-group"><label class="form-label">Flow
+          <span class="pill p-miss" style="font-size:9px">required</span></label>
+        <select class="form-select" name="ivrFlowId" required>
+          <option value="">Select…</option>
+          
+            <option value="f1" selected>German multi-dept</option>
+          
+        </select>
+        <span class="muted" style="font-size:10px">Greeting, every key and its action, the retry
+          limits and the goodbye all live in the flow.</span></div>
+      <div class="form-group"><label class="form-label">Agent ring timeout (s)</label>
+        <input class="form-input" name="agentRingSeconds" type="number" min="10" max="120"
+               value="30">
+        <span class="muted" style="font-size:10px">How long the agent's phone rings before the lead
+          is handed back to the flow.</span></div>
+    </div>
+
+    <!-- Hidden field first: an unticked checkbox submits nothing, so without
+         it this could be switched on and never off again. -->
+    <div class="grid-3">
+      <div class="form-group"><label class="form-label">Max seconds per call</label>
+        <input class="form-input" name="maxCallSeconds" type="number" min="0" max="600"
+               value="90">
+        <span class="muted" style="font-size:10px">Ceiling on the menu part of a call, timed from
+          the dial. The round limits cap how many prompts play, not how long the call lasts — and a
+          line held for two minutes by someone who pressed nothing is what exhausts a trunk's
+          channels. Never applies once a call reaches an agent. 0 = no limit.</span></div>
+    </div>
+
+    <input type="hidden" name="detectMachines" value="false">
+    <label class="form-label" style="display:flex;align-items:center;gap:8px;margin:14px 0 6px">
+      <input type="checkbox" name="detectMachines" value="true"
+             checked>
+      Hang up on answering machines</label>
+    <div class="muted" style="font-size:11px;margin-bottom:12px">
+      Listens for about four seconds after the call is answered and drops it if it sounds like
+      voicemail, instead of playing the prompt to a machine and waiting out the full menu.
+      <strong>This is a guess, not a fact.</strong> It costs every real person a short silence
+      before the prompt starts, and it will occasionally drop a live lead — check the
+      <em>Answering machine</em> count in the report against your connect rate before trusting it.
+      Worth switching on mainly when your trunk has a channel limit, since a machine otherwise
+      holds a line for the whole menu.</div>
+    
+      <div class="muted" data-flow="f1" style="font-size:11px;margin-top:8px;display:none">
+        <strong>German multi-dept</strong> —
+        
+          press <span class="mono">1</span>:
+          transfer to an agent (Recovery);
+        
+        s to answer,  wrong presses,
+         silent rounds, then it hangs up.
+        <a href="/ivr?edit=f1">Edit</a>
+      </div>
+    
+    <script>
+    (function(){
+      var sel = document.querySelector('[name="ivrFlowId"]');
+      function show(){
+        document.querySelectorAll('[data-flow]').forEach(function(el){
+          el.style.display = el.getAttribute('data-flow') === sel.value ? 'block' : 'none';
+        });
+      }
+      sel.addEventListener('change', show); show();
+    })();
+    </script>
+    
+  </div>
+</div>
+
+<div class="section">
+  <div class="sec-head"><div class="sec-title">Pacing</div></div>
+  <div class="card">
+    <div class="grid-3">
+      <div class="form-group"><label class="form-label">Strategy</label>
+        <select class="form-select" name="strategy" id="c-strategy" onchange="syncStrategy()">
+          <option value="power" selected>Power — one call per free agent</option>
+          <option value="predictive" >Predictive — overdial</option>
+        </select>
+        <span class="muted" style="font-size:10px">Power never abandons a caller. Predictive dials
+          more people than there are agents, betting most will not answer — faster, and some
+          confirmed leads will find nobody free.</span></div>
+      <div class="form-group"><label class="form-label">Lines per agent</label>
+        <input class="form-input" name="linesPerAgent" type="number" min="1" max="50" value="1">
+        <span class="muted" style="font-size:10px">1 = one call per free agent. Above 1 is predictive overdial — faster, but some confirmed callers find no agent free.</span></div>
+      <div class="form-group"><label class="form-label">Max concurrent calls</label>
+        <input class="form-input" name="maxConcurrent" type="number" min="1" max="200" value="10">
+        <span class="muted" style="font-size:10px">Hard ceiling, whatever the ratio works out to.</span></div>
+      <div class="form-group"><label class="form-label">Carrier CPS limit</label>
+        <input class="form-input" name="callsPerSecond" type="number" min="0" max="100"
+               value="10">
+        <span class="muted" style="font-size:10px">New calls per second, as the
+          <strong>carrier</strong> allows — ask them, don't guess. Going over it gets the surplus
+          rejected with <span class="mono">503</span> / hangup cause 34, which reads like
+          congestion or a dead trunk. 0 = uncapped.</span></div>
+
+      <div class="form-group"><label class="form-label">Calls/hour cap</label>
+        <input class="form-input" name="callsPerHourCap" type="number" min="0" value="0">
+        <span class="muted" style="font-size:10px">0 = uncapped.</span></div>
+      <div class="form-group"><label class="form-label">Retry attempts</label>
+        <input class="form-input" name="retryAttempts" type="number" min="0" max="99" value="20">
+        <span class="muted" style="font-size:10px">Redials after the first call. 0 = call once and
+          stop. A number is retired early if it transfers, opts out or asks to be removed — and a
+          call that never reached anyone is not counted as an attempt.</span></div>
+      <div class="form-group"><label class="form-label">Retry delay (min)</label>
+        <input class="form-input" name="retryDelayMinutes" type="number" min="5" max="1440" value="90"></div>
+    </div>
+    <script>
+    // Power dialling is one line per agent by definition; an editable field
+    // that disagrees with the strategy is how a "safe" campaign overdials.
+    function syncStrategy(){
+      var pred = document.getElementById('c-strategy').value === 'predictive';
+      var lpa = document.querySelector('[name="linesPerAgent"]');
+      lpa.disabled = !pred;
+      if (!pred) lpa.value = 1;
+      lpa.closest('.form-group').style.opacity = pred ? '1' : '0.45';
+    }
+    syncStrategy();
+    document.querySelector('form').addEventListener('submit', function(){
+      document.querySelector('[name="linesPerAgent"]').disabled = false;
+    });
+    </script>
+  </div>
+</div>
+
+<div class="section"><div class="card">
+  <button class="btn btn-primary" type="submit">Save campaign</button>
+  <a class="btn" href="/campaigns">Cancel</a>
+</div></div>
+</form>
+    </main>
+  </div>
+
+<script>
+/*
+ * Give every table cell the name of its column.
+ *
+ * On a phone each row is rendered as a small card and the header row is
+ * hidden, so a bare value like "6251" means nothing without its label. Doing
+ * it here rather than in the views means a new table is handled the moment it
+ * is written, and nobody has to keep duplicate column names in sync.
+ *
+ * It also runs after the live dashboard replaces rows, via the observer
+ * below, so rows that appear after load are labelled too.
+ */
+(function () {
+  function label(table) {
+    var heads = [].map.call(table.querySelectorAll('thead th'), function (th) {
+      return (th.textContent || '').trim();
+    });
+    if (!heads.length) return;
+    [].forEach.call(table.querySelectorAll('tbody tr'), function (tr) {
+      [].forEach.call(tr.children, function (td, i) {
+        if (td.hasAttribute('data-label')) return;
+        var name = heads[i] || '';
+        td.setAttribute('data-label', name);
+        // The trailing column of buttons has no header; mark it so the CSS
+        // can give it the full width instead of a label gutter.
+        if (!name) td.classList.add('cell-actions');
+      });
+    });
+  }
+  function labelAll() { [].forEach.call(document.querySelectorAll('table.tbl'), label); }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    labelAll();
+    // The campaign dashboard rewrites cells every couple of seconds; new
+    // nodes need labelling too, and re-labelling an old one is a no-op.
+    if (window.MutationObserver) {
+      var pending = null;
+      new MutationObserver(function () {
+        clearTimeout(pending);
+        pending = setTimeout(labelAll, 100);
+      }).observe(document.body, { childList: true, subtree: true });
+    }
+  });
+})();
+</script>
+</body>
+</html>
+

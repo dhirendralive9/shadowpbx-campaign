@@ -36,13 +36,16 @@
             <option value="<%= t.id %>" <%= sel(t.id, c.trunkId) %>><%= t.name %> — <%= t.host %></option>
           <% }) %>
         </select></div>
-      <div class="form-group"><label class="form-label">Server <span class="muted">(where confirmed leads go)</span></label>
+      <div class="form-group"><label class="form-label">Default server <span class="muted">(where confirmed leads go)</span></label>
         <select class="form-select" name="serverId" required>
           <option value="">Select…</option>
           <% (settings.servers||[]).forEach(function(s){ %>
             <option value="<%= s.id %>" <%= sel(s.id, c.serverId) %>><%= s.name %><%= s.routeNumber ? ' — route ' + s.routeNumber : '' %></option>
           <% }) %>
-        </select></div>
+        </select>
+        <span class="muted" style="font-size:10px">Where a keypress lands unless the IVR key names
+          its own department. Set a server per key on the IVR tab and one flow can serve recovery,
+          sales and support; this is the fallback for keys that name none.</span></div>
     </div>
   </div>
 </div>

@@ -30,7 +30,14 @@
         <td style="font-size:12px">
           <% f.keys.forEach(function(k){ %>
             <span class="pill p-info" style="font-size:10px"><%= k.key %></span>
-            <%= actions[k.action] ? actions[k.action].label : k.action %><%= k.label ? ' — ' + k.label : '' %><br>
+            <%= actions[k.action] ? actions[k.action].label : k.action %><%= k.label ? ' — ' + k.label : '' %><%
+              /* Where it actually routes, which the key's own label only
+                 happens to describe when someone named it carefully. */
+              if (k.action === 'transfer') {
+                var dept = (settings.servers || []).find(function(v){ return v.id === k.serverId; });
+            %> <span class="muted" style="font-size:10px">→ <%= k.serverId
+                 ? (dept ? dept.name : 'deleted server — falls back to the campaign')
+                 : 'campaign default' %></span><% } %><br>
           <% }) %>
           <% if (!f.keys.length) { %><span class="muted">no keys</span><% } %>
         </td>
@@ -120,11 +127,14 @@
         <span class="muted" style="font-weight:normal">— what happens on each press</span></div>
       <table class="tbl" id="key-table"><thead><tr>
         <th style="width:70px">Key</th><th style="width:150px">Label</th>
-        <th>Audio on press</th><th>Then</th><th>Hold audio</th><th style="width:110px">Wait (s)</th><th></th>
+        <th>Audio on press</th><th>Then</th><th>Department</th><th>Hold audio</th><th style="width:110px">Wait (s)</th><th></th>
       </tr></thead><tbody id="key-body"></tbody></table>
       <button class="btn btn-sm" type="button" onclick="addKey()">+ Add a key</button>
       <span class="muted" style="font-size:11px;margin-left:8px">
-        Hold audio and wait apply to a transfer: it loops while the agent's phone rings.</span>
+        Hold audio and wait apply to a transfer: it loops while the agent's phone rings.
+        <strong>Department</strong> is which PBX that key hands the call to — set a different one
+        per key and a single flow serves recovery, sales and support at once. Leave it on
+        <em>campaign default</em> and the key goes wherever the campaign points.</span>
 
       <!-- ── 3. when it goes wrong ───────────────────────────────── -->
       <div class="form-label" style="margin-top:20px">3 · Wrong key, or no key</div>
@@ -183,6 +193,27 @@ function opts(sel, blank){
   });
   return h;
 }
+/* Server names are typed by whoever set them up and these rows are built with
+   innerHTML, so anything going into one is escaped on the way in. */
+function esc(v){
+  return String(v == null ? '' : v)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+var SERVERS = <%- JSON.stringify((settings.servers||[]).map(function(s){
+  return { id:s.id, name:s.name, routeNumber:s.routeNumber }; })) %>;
+
+function serverOpts(sel){
+  var out = '<option value="">Campaign default</option>';
+  SERVERS.forEach(function(s){
+    if (!s.routeNumber) return;            // nothing to transfer to yet
+    out += '<option value="' + s.id + '"' + (sel === s.id ? ' selected' : '') + '>'
+         + esc(s.name) + ' — ' + esc(s.routeNumber) + '</option>';
+  });
+  return out;
+}
+
 function actionOpts(sel){
   return Object.keys(ACTIONS).map(function(a){
     return '<option value="' + a + '"' + (sel === a ? ' selected' : '') + '>' + ACTIONS[a].label + '</option>';
@@ -193,11 +224,12 @@ function addKey(k){
   k = k || {key:'',label:'',audio:'',action:'transfer',holdAudio:'',holdSeconds:30};
   var tr = document.createElement('tr');
   tr.innerHTML =
-    '<td><input class="form-input mono" name="key[]" maxlength="1" style="text-align:center" value="' + (k.key||'') + '"></td>' +
-    '<td><input class="form-input" name="keyLabel[]" placeholder="Interested" value="' + (k.label||'') + '"></td>' +
+    '<td><input class="form-input mono" name="key[]" maxlength="1" style="text-align:center" value="' + esc(k.key||'') + '"></td>' +
+    '<td><input class="form-input" name="keyLabel[]" placeholder="Interested" value="' + esc(k.label||'') + '"></td>' +
     '<td><select class="form-select" name="keyAudio[]">' + opts(k.audio) + '</select></td>' +
     '<td><select class="form-select" name="keyAction[]" onchange="syncRow(this)">' + actionOpts(k.action) + '</select>' +
       '<div class="muted" style="font-size:10px" data-help></div></td>' +
+    '<td><select class="form-select" name="keyServer[]">' + serverOpts(k.serverId||'') + '</select></td>' +
     '<td><select class="form-select" name="keyHoldAudio[]">' + opts(k.holdAudio) + '</select></td>' +
     '<td><input class="form-input" name="keyHoldSeconds[]" type="number" min="5" max="300" value="' + (k.holdSeconds||30) + '"></td>' +
     '<td style="text-align:right"><button class="btn btn-sm btn-danger" type="button" ' +
@@ -214,6 +246,8 @@ function syncRow(sel){
   var on = !!a.hold;
   tr.children[4].style.opacity = on ? '1' : '0.35';
   tr.children[5].style.opacity = on ? '1' : '0.35';
+  tr.children[6].style.opacity = on ? '1' : '0.35';
+  tr.querySelector('[name="keyServer[]"]').disabled = !on;
   tr.querySelector('[name="keyHoldAudio[]"]').disabled = !on;
   tr.querySelector('[name="keyHoldSeconds[]"]').disabled = !on;
   tr.querySelector('[data-help]').textContent = a.help || '';
@@ -301,6 +335,7 @@ document.getElementById('ivr-form').addEventListener('submit', function(e){
   if (dupes.length) { e.preventDefault(); return alert('Key ' + dupes[0] + ' appears twice.'); }
   // A disabled field posts nothing, which would misalign the parallel arrays.
   rows.forEach(function(r){
+    r.querySelector('[name="keyServer[]"]').disabled = false;
     r.querySelector('[name="keyHoldAudio[]"]').disabled = false;
     r.querySelector('[name="keyHoldSeconds[]"]').disabled = false;
   });

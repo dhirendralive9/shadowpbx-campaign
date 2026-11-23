@@ -243,6 +243,27 @@ function recordOutcome(c, rt, phone, job) {
   });
 }
 
+/**
+ * Every configured server, keyed by id, in the shape a transfer needs.
+ *
+ * Built per call rather than cached: a server added or renamed mid-campaign
+ * should take effect on the next call, not on the next restart.
+ */
+function serverMap() {
+  const out = {};
+  try {
+    for (const sv of store.load().servers || []) {
+      if (!sv.routeNumber) continue;
+      out[sv.id] = {
+        endpoint: `PJSIP/server-${sv.id}`,
+        routeNumber: sv.routeNumber,
+        name: sv.name || '',
+      };
+    }
+  } catch (e) { /* a transfer falls back to the campaign server */ }
+  return out;
+}
+
 /** Trunk name for the record, without blowing up if settings moved underneath. */
 function cfgTrunkName(c) {
   try {
@@ -322,6 +343,10 @@ function dialNow(c, rt, lead, cfg) {
       label: c.name,
       serverEndpoint: `PJSIP/server-${cfg.server.id}`,
       routeNumber: cfg.server.routeNumber,
+      serverName: cfg.server.name,
+      // Every server, so an IVR key naming its own department can be routed
+      // without the dialler having to know which keys exist.
+      servers: serverMap(),
       agentRingSeconds: c.ivr.agentRingSeconds,
       detectMachines: !!c.ivr.detectMachines,
       maxCallSeconds: c.ivr.maxCallSeconds,

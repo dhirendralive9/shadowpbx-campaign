@@ -440,13 +440,43 @@ async function waitForDigit(job, ms) {
  * bridge the two legs. This is the part worth testing for real -- everything
  * before it is prompts, and prompts rarely surprise anyone.
  */
+/**
+ * Which PBX this keypress goes to.
+ *
+ * A key may name its own server, which is how one flow serves several
+ * departments -- press 1 for recovery, 2 for sales, 3 for support. A key that
+ * names none falls back to the campaign's server, so every flow written
+ * before departments existed keeps working exactly as it did.
+ *
+ * A key naming a server that has since been deleted falls back too rather
+ * than dropping the call: the lead already pressed a key and is waiting, and
+ * reaching the wrong department beats reaching nobody.
+ */
+function serverFor(job, key) {
+  const wanted = key && key.serverId;
+  if (wanted && job.servers && job.servers[wanted]) {
+    return { ...job.servers[wanted], fellBack: false };
+  }
+  return {
+    endpoint: job.serverEndpoint,
+    routeNumber: job.routeNumber,
+    name: job.serverName || '',
+    fellBack: !!wanted,
+  };
+}
+
 async function doTransfer(job, channel, client, key) {
-  if (!job.serverEndpoint || !job.routeNumber) {
-    finish(job, false, 'Key pressed, but this module has no active server to transfer to. '
-      + 'Add one on the Servers tab.');
+  const target = serverFor(job, key);
+  if (!target.endpoint || !target.routeNumber) {
+    finish(job, false, 'Key pressed, but this module has no server to transfer to. '
+      + 'Add one on the Servers tab, and pick it on the campaign or the IVR key.');
     try { await channel.hangup(); } catch (e) {}
     return;
   }
+  if (target.fellBack) {
+    log(job, `The server this key named is gone — using ${target.name || 'the campaign default'}`);
+  }
+  log(job, `Transferring to ${target.name || 'the campaign server'} (${target.routeNumber})`);
 
   const bridge = client.Bridge();
   try { await bridge.create({ type: 'mixing' }); } catch (e) {
@@ -515,11 +545,12 @@ async function doTransfer(job, channel, client, key) {
     };
   });
 
-  log(job, `Ringing ${job.routeNumber} on the PBX (up to ${job.agentRingSeconds}s)`, 'ringing-agent');
+  log(job, `Ringing ${target.routeNumber} on ${target.name || 'the PBX'} `
+    + `(up to ${job.agentRingSeconds}s)`, 'ringing-agent');
   const agent = client.Channel();
   try {
     await agent.originate({
-      endpoint: dialString(job.serverEndpoint, job.routeNumber, 'plain'),
+      endpoint: dialString(target.endpoint, target.routeNumber, 'plain'),
       app: ARI_APP,
       appArgs: `agent,${job.id}`,
       // The agent must see who is calling. Without this the leg is placed with
@@ -553,7 +584,8 @@ async function doTransfer(job, channel, client, key) {
     log(job, 'No agent answered');
     await playInterruptible(job, channel, job.flow.exitAudio);
     finish(job, false,
-      `Nobody answered on ${job.routeNumber} within ${key.holdSeconds || job.agentRingSeconds}s. `
+      `Nobody answered on ${target.routeNumber}${target.name ? ' (' + target.name + ')' : ''} `
+      + `within ${key.holdSeconds || job.agentRingSeconds}s. `
       + 'The flow worked; the queue had no one free, or the inbound route points somewhere quiet.');
     try { await channel.hangup(); } catch (e) {}
     return;
@@ -741,6 +773,9 @@ function start(opts) {
     flow: opts.flow || null,
     serverEndpoint: opts.serverEndpoint || '',
     routeNumber: opts.routeNumber || '',
+    serverName: opts.serverName || '',
+    // id -> { endpoint, routeNumber, name } for every server a key may name.
+    servers: opts.servers || null,
     agentRingSeconds: Math.max(10, Math.min(120, parseInt(opts.agentRingSeconds, 10) || 30)),
     digits: [],
     path: [],                       // every step taken, for the timeline

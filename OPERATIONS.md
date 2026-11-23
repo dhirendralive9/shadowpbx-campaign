@@ -225,6 +225,35 @@ Also check the SIP host is the provider's hostname. A provider portal showing
 your own server's IP under "host" means the IP they accept traffic from, not an
 address to send to.
 
+## Departments — several servers, one flow
+
+Each server on `/servers` is a department with its own PBX and its own
+inbound route number. Every one gets its own hand-off panel showing the route
+to configure, a copy button, and live agent counts, because that number has
+to exist on that PBX before any call can land there.
+
+Routing is set per IVR key, in the **Department** column:
+
+    press 1  -> transfer -> Recovery   (route 900100100100)
+    press 2  -> transfer -> Sales      (route 900200200200)
+    press 3  -> transfer -> campaign default
+
+A key left on *campaign default* goes to whatever the campaign's Default
+server is, which is how every flow written before departments existed keeps
+working untouched.
+
+A key naming a server that has since been deleted falls back to the campaign
+default rather than dropping the call — the lead already pressed a key and is
+waiting, and reaching the wrong desk beats reaching nobody. Saving a flow
+reports those keys so they can be repointed, and the flow list shows where
+each key actually routes rather than only what its label says.
+
+The server list is read fresh for each call, so a department added or renamed
+mid-campaign takes effect on the next call rather than the next restart.
+
+Agent availability is still counted per server, so a campaign paces against
+the queue it actually dials into.
+
 ## Retries
 
 A lead is dialled again when all of these hold:

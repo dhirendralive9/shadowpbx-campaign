@@ -36,43 +36,52 @@
   </div>
 </div>
 
-<% var act = settings.servers.find(function(x){ return x.id === settings.activeServerId; }); %>
-<% if (act) { %>
+<%
+/* One panel per server, not just the active one.
+ *
+ * Each server is a department with its OWN route number, and that number has
+ * to be configured on that PBX before any key pointing at it can land. With a
+ * single panel for the active server there was no way to see — let alone copy
+ * — the route for the others, which is what made the module look like it
+ * supported one server.
+ */
+settings.servers.forEach(function(sv){ var on = sv.id === settings.activeServerId; %>
 <div class="section">
-  <div class="sec-head"><div class="sec-title">Hand-off route — <%= act.name %></div></div>
+  <div class="sec-head"><div class="sec-title">Hand-off route — <%= sv.name %>
+    <% if (on) { %><span class="pill p-ok" style="font-size:10px">campaign default</span><% } %>
+  </div></div>
   <div class="card">
     <div class="grid-3">
       <div class="form-group">
         <label class="form-label">Inbound route number</label>
-        <input class="form-input mono" id="route-num" value="<%= act.routeNumber %>" readonly
+        <input class="form-input mono" data-route="<%= sv.id %>" value="<%= sv.routeNumber %>" readonly
                style="font-size:18px;letter-spacing:1px">
         <span class="muted" style="font-size:11px">
-          Add this on <%= act.name %> under <span class="mono">/routes</span> as an inbound route,
-          pointing at the ring group or queue for this campaign.
+          Add this on <%= sv.name %> under <span class="mono">/routes</span> as an inbound route,
+          pointing at the ring group or queue for this department.
           <strong>Also add this server's public IP</strong> to
-          <span class="mono">TRUNK_TRUSTED_IPS</span> in the PBX's
+          <span class="mono">TRUNK_TRUSTED_IPS</span> in that PBX's
           <span class="mono">.env</span> — without it the PBX answers
           <em>unallocated number</em> and the call never reaches the queue.</span>
       </div>
       <div class="form-group">
         <label class="form-label">&nbsp;</label>
-        <button class="btn" type="button" onclick="copyRoute()">Copy number</button>
-        <button class="btn" type="button" id="ag-refresh"
-                onclick="refreshAgents('<%= act.id %>')">Refresh agents</button>
-        <form class="inline-form" method="post" action="/servers/<%= act.id %>/regenerate-route"
-              onsubmit="return confirm('Generate a new route number?\n\nCalls stop reaching agents until you repoint the inbound route on the PBX.')">
+        <button class="btn" type="button" onclick="copyRoute('<%= sv.id %>')">Copy number</button>
+        <button class="btn" type="button" onclick="refreshAgents('<%= sv.id %>')">Refresh agents</button>
+        <form class="inline-form" method="post" action="/servers/<%= sv.id %>/regenerate-route"
+              onsubmit="return confirm('Generate a new route number for <%= sv.name %>?\n\nCalls stop reaching its agents until you repoint the inbound route on that PBX.')">
           <button class="btn btn-sm" type="submit">Regenerate</button></form>
       </div>
       <div class="form-group">
         <label class="form-label">Agents on the queue</label>
-        <div class="kpi-val" id="ag-count" style="font-size:26px">—</div>
-        <span class="muted" style="font-size:11px" id="ag-detail">connecting…</span>
+        <div class="kpi-val" data-agcount="<%= sv.id %>" style="font-size:26px">—</div>
+        <span class="muted" style="font-size:11px" data-agdetail="<%= sv.id %>">connecting…</span>
       </div>
     </div>
-    <div id="ag-err"></div>
+    <div data-agerr="<%= sv.id %>"></div>
   </div>
 </div>
-<% } %>
+<% }); %>
 
 <div class="section" id="rt-section" style="display:none">
   <div class="sec-head"><div class="sec-title" id="rt-title">Test call</div>
@@ -173,8 +182,9 @@ function resetServer(){
   s_key.placeholder='not set';
   document.getElementById('form-title').textContent='Add a server';
 }
-function copyRoute(){
-  var el=document.getElementById('route-num'); el.select();
+function copyRoute(id){
+  var el=document.querySelector('[data-route="'+id+'"]'); if(!el) return;
+  el.select();
   try{ document.execCommand('copy'); }catch(e){}
   el.blur();
 }
@@ -200,16 +210,21 @@ function describe(a){
   return a.available+' free of '+a.total+(a.group?' · '+a.group:'')
        + ' · '+(a.transport==='ws'?'live':'polling');
 }
+function setAgents(id, a){
+  var c=document.querySelector('[data-agcount="'+id+'"]');
+  if(c) c.textContent = a.fresh ? a.available : '—';
+  var d=document.querySelector('[data-agdetail="'+id+'"]');
+  if(d) d.textContent = a.fresh ? describe(a) : (a.error||'the PBX did not answer');
+}
 function refreshAgents(id){
-  var b=document.getElementById('ag-refresh');
+  // Each panel owns its own button now, so find the one that was clicked
+  // rather than a single shared id.
+  var b=document.querySelector('[onclick="refreshAgents(\''+id+'\')"]');
   if(b){ b.disabled=true; b.textContent='Refreshing…'; }
   api('/api/servers/'+id+'/agents/refresh',{method:'POST'})
     .then(function(a){
       if(b){ b.disabled=false; b.textContent='Refresh agents'; }
-      var c=document.getElementById('ag-count');
-      if(c) c.textContent = a.fresh ? a.available : '—';
-      var d=document.getElementById('ag-detail');
-      if(d) d.textContent = a.fresh ? describe(a) : (a.error||'the PBX did not answer');
+      setAgents(id, a);
     })
     .catch(function(e){
       if(b){ b.disabled=false; b.textContent='Refresh agents'; }
@@ -226,16 +241,8 @@ function pollAgents(){
         pill.textContent = a.fresh ? (a.available+'/'+a.total) : '—';
         pill.className = 'pill '+(!a.fresh ? 'p-err' : (a.available>0?'p-ok':'p-gray'));
       }
-      if(sv.id===ACTIVE_SERVER_ID){
-        var c=document.getElementById('ag-count'); if(!c) return;
-        c.textContent = a.fresh ? a.available : '—';
-        document.getElementById('ag-detail').textContent = describe(a);
-        document.getElementById('ag-err').innerHTML =
-          (!a.fresh && a.error)
-            ? '<div class="alert alert-err" style="margin-top:10px">'+a.error+
-              (a.wsSupported?'':' · live updates need the ws package — run npm install')+'</div>'
-            : '';
-      }
+      setAgents(sv.id, a);
+    
     }).catch(function(){});
   });
   setTimeout(pollAgents,5000);

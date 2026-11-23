@@ -473,7 +473,7 @@ app.post('/ivr/save', auth, (req, res) => {
   const saved = all.find((f) => f.id === req.body.id)
     || all[all.length - 1];
   // Say what is still missing rather than letting it fail on a live call.
-  const gaps = ivr.validate(saved);
+  const gaps = ivr.validate(saved, store.load().servers || []);
   res.redirect('/ivr?msg=' + encodeURIComponent(
     `Saved "${saved.name}".` + (gaps.length ? ` Still needs: ${gaps.join('; ')}.` : '')));
 });
@@ -654,6 +654,15 @@ app.post('/api/ivr/:id/test-call', auth, (req, res) => {
       label: flow.name,
       serverEndpoint: server ? `PJSIP/server-${server.id}` : '',
       routeNumber: server ? server.routeNumber : '',
+      serverName: server ? server.name : '',
+      // So a flow test exercises the real department routing rather than
+      // sending every key to whichever server the test happened to pick.
+      servers: (s.servers || []).reduce((m, sv) => {
+        if (sv.routeNumber) {
+          m[sv.id] = { endpoint: `PJSIP/server-${sv.id}`, routeNumber: sv.routeNumber, name: sv.name || '' };
+        }
+        return m;
+      }, {}),
       agentRingSeconds: req.body.agentRingSeconds,
       sound: flow.greetingAudio,
     });

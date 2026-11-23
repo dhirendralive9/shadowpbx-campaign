@@ -31,7 +31,8 @@ const newId = () => crypto.randomBytes(6).toString('hex');
 const ACTIONS = {
   transfer: {
     label: 'Transfer to an agent',
-    help: 'Sends the call to the active server’s route number; the queue picks the agent.',
+    help: 'Rings a PBX route number; the queue there picks the agent. Each key can go to a '
+      + 'different server, so one flow can serve several departments.',
     hold: true,          // uses hold audio + how long to wait
   },
   optout: {
@@ -75,6 +76,11 @@ const DEFAULT_KEY = {
   action: 'hangup',
   holdAudio: '',
   holdSeconds: 30,
+  // Which PBX this key hands the call to. Blank means the campaign's own
+  // server, which is what keeps every existing flow working untouched. Set it
+  // and the key becomes a department: press 1 for recovery, 2 for sales, 3
+  // for support, each landing on a different queue.
+  serverId: '',
 };
 
 function ensure() { fs.mkdirSync(DIR, { recursive: true }); }
@@ -114,6 +120,7 @@ function parseKeys(data) {
   const actions = asArray(data['keyAction[]'] || data.keyAction);
   const holdA = asArray(data['keyHoldAudio[]'] || data.keyHoldAudio);
   const holdS = asArray(data['keyHoldSeconds[]'] || data.keyHoldSeconds);
+  const servers = asArray(data['keyServer[]'] || data.keyServer);
 
   const out = [];
   const seen = new Set();
@@ -131,6 +138,7 @@ function parseKeys(data) {
       action,
       holdAudio: action === 'transfer' ? String(holdA[i] || '').trim() : '',
       holdSeconds: action === 'transfer' ? clamp(holdS[i], 5, 300, 30) : 30,
+      serverId: action === 'transfer' ? String(servers[i] || '').trim() : '',
     });
   }
   return out.sort((a, b) => a.key.localeCompare(b.key));
@@ -190,7 +198,15 @@ function duplicate(id) {
  * Problems that would show up as a silent or looping call, named before the
  * flow is ever dialled.
  */
-function validate(flow) {
+/**
+ * What a flow is still missing.
+ *
+ * `servers` is optional: pass the configured list and keys naming a
+ * department that no longer exists are reported too. A flow is saved before
+ * anyone thinks to delete a server, so this is worth catching at the point
+ * someone is looking at the flow rather than mid-call.
+ */
+function validate(flow, servers) {
   const out = [];
   if (!flow) return ['no IVR flow'];
   if (!flow.greetingAudio) out.push('a greeting — the menu itself');
@@ -207,6 +223,15 @@ function validate(flow) {
   }
   if (flow.keys.every((k) => k.action === 'repeat')) {
     out.push('a key that ends the call — every key replays the menu');
+  }
+  if (Array.isArray(servers)) {
+    const known = new Set(servers.map((v) => v.id));
+    for (const k of flow.keys) {
+      if (k.action === 'transfer' && k.serverId && !known.has(k.serverId)) {
+        out.push(`a department for key ${k.key} — the server it pointed at has been deleted, `
+          + 'so it falls back to the campaign\'s own server');
+      }
+    }
   }
   if (!flow.exitAudio) out.push('exit audio, played before hanging up');
   return out;

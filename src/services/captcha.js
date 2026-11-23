@@ -30,6 +30,7 @@ const enabled = () =>
   ['on', '1', 'true', 'yes'].includes(String(process.env.LOGIN_CAPTCHA || 'off').toLowerCase());
 
 let cap = null;
+let captchaUnavailable = false;
 function instance() {
   if (cap) return cap;
   const Cap = require('@cap.js/server');
@@ -67,9 +68,22 @@ function pkgDir(name) {
 
 function mount(app) {
   if (!enabled()) return false;
-  // Fail now, at startup, if a dependency is missing -- not on the first
-  // login, when the only way to find out is being locked out.
-  instance();
+  // If the captcha's packages are missing, carry on WITHOUT the captcha
+  // rather than refusing to start. This first version crashed instead, and a
+  // crash here takes down the whole process -- the campaign dialler with it,
+  // over a login extra. Falling back leaves the login exactly as it was before
+  // the captcha existed (the per-IP lockout still applies), and says so loudly
+  // with the command that fixes it.
+  try {
+    instance();
+    pkgDir('@cap.js/widget'); pkgDir('@cap.js/wasm'); pkgDir('pako');
+  } catch (e) {
+    console.error('LOGIN_CAPTCHA=on but its packages are not installed, so the login is running '
+      + 'WITHOUT the captcha. Fix: cd ' + path.join(__dirname, '../..')
+      + ' && npm install --omit=dev && systemctl restart shadowpbx-campaign');
+    captchaUnavailable = true;
+    return false;
+  }
   const files = {
     'cap.min.js': path.join(pkgDir('@cap.js/widget'), 'cap.min.js'),
     'cap_wasm_bg.wasm': path.join(pkgDir('@cap.js/wasm'), 'browser', 'cap_wasm_bg.wasm'),
@@ -113,7 +127,7 @@ function mount(app) {
  * password attempt and cannot be replayed.
  */
 async function verify(token) {
-  if (!enabled()) return { ok: true };
+  if (!enabled() || captchaUnavailable) return { ok: true };
   if (typeof token !== 'string' || !token || token.length > 512) {
     return { ok: false, error: 'Please wait for the verification check to finish, then sign in.' };
   }

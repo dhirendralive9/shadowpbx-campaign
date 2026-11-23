@@ -42,9 +42,19 @@ else
   git --no-pager log --oneline "$BEFORE..$AFTER" | sed 's/^/    /'
 fi
 
-if ! git diff --quiet "$BEFORE" "$AFTER" -- package.json package-lock.json 2>/dev/null; then
-  say "Dependencies changed — installing"
-  npm install --omit=dev
+# Install whenever what is in node_modules does not match package.json --
+# not only when THIS run's pull changed it. Gating on the pull missed the
+# common case of `git pull` by hand followed by update.sh: the script then saw
+# nothing new, skipped the install, and the app crashed on a package that was
+# never fetched. `npm ls` answers the real question whoever pulled.
+if ! git diff --quiet "$BEFORE" "$AFTER" -- package.json package-lock.json 2>/dev/null \
+   || ! npm ls --omit=dev --depth=0 >/dev/null 2>&1; then
+  say "Installing dependencies"
+  npm install --omit=dev --no-audit --no-fund
+  npm ls --omit=dev --depth=0 >/dev/null 2>&1 \
+    || warn "npm still reports missing or mismatched packages — check the output above"
+else
+  echo "    dependencies already match package.json"
 fi
 
 say "Updating Asterisk config"

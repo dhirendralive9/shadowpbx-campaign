@@ -224,6 +224,7 @@ cp "$ENV_FILE" "$ENV_FILE.bak-$(date +%F-%H%M%S)"
 env_set HOST 127.0.0.1        # not reachable from outside except through nginx
 env_set TRUST_PROXY 1         # real client IPs for the login limiter
 env_set COOKIE_SECURE 1       # session cookie only ever sent over HTTPS
+env_set LOGIN_CAPTCHA on      # proof-of-work check before any password guess
 chmod 600 "$ENV_FILE"
 systemctl restart "$SERVICE"
 
@@ -252,6 +253,8 @@ cat <<DONE
     Open:  https://$DOMAIN
 
     - HTTP redirects to HTTPS; the certificate renews itself.
+    - The login page now runs a short invisible verification before sign-in.
+      To switch it off: set LOGIN_CAPTCHA=off in .env and restart.
     - The app itself now listens on 127.0.0.1:$PORT only, so the old
       http://<ip>:$PORT address stops working. That is the point.
     - SIP (5060) and RTP (10000-20000) are not touched by any of this.

@@ -11,7 +11,44 @@
       <input class="form-input" name="username" autocomplete="username" autofocus required></div>
     <div class="form-group"><label class="form-label">Password</label>
       <input class="form-input" name="password" type="password" autocomplete="current-password" required></div>
-    <button class="login-btn" type="submit">Sign in</button>
+    <% if (typeof captchaOn !== 'undefined' && captchaOn) { %>
+      <div class="form-group" style="margin-top:4px">
+        <cap-widget id="cap" data-cap-api-endpoint="/cap/"></cap-widget>
+      </div>
+      <script>
+        /* Point the widget at this server. Left alone it downloads its solver
+           from cdn.jsdelivr.net, which would make every login depend on a
+           CDN -- and fail outright on networks that block it. */
+        window.CAP_CUSTOM_WASM_URL   = '/cap-assets/cap_wasm_bg.wasm';
+        window.CAP_CUSTOM_HASHWX_URL = '/cap-assets/hashwx.wasm';
+        window.CAP_PAKO_URL          = '/cap-assets/pako_inflate.min.js';
+      </script>
+      <script src="/cap-assets/cap.min.js" defer></script>
+    <% } %>
+    <button class="login-btn" type="submit" id="signin">Sign in</button>
+    <% if (typeof captchaOn !== 'undefined' && captchaOn) { %>
+      <script>
+        /* Start the check as soon as the page loads, so it is done by the time
+           the password is typed. Until it is, the button says so rather than
+           letting someone submit a form the server will reject. */
+        (function () {
+          var btn = document.getElementById('signin');
+          btn.disabled = true; btn.textContent = 'Verifying…';
+          function start() {
+            var w = document.getElementById('cap');
+            if (!w || typeof w.solve !== 'function') return setTimeout(start, 100);
+            w.addEventListener('solve', function () { btn.disabled = false; btn.textContent = 'Sign in'; });
+            w.addEventListener('error', function () {
+              btn.disabled = true;
+              btn.textContent = 'Verification failed — click the check to retry';
+            });
+            w.addEventListener('reset', function () { btn.disabled = true; btn.textContent = 'Verifying…'; });
+            try { w.solve(); } catch (e) {}
+          }
+          document.addEventListener('DOMContentLoaded', start);
+        })();
+      </script>
+    <% } %>
     <p class="muted" style="font-size:11px;margin-top:14px">Uses the ARI credentials from <span class="mono">.env</span></p>
   </form>
 </div></body></html>

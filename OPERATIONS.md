@@ -422,6 +422,32 @@ A Cloudflare-proxied record resolves to Cloudflare rather than this server;
 the script warns and asks before carrying on, since the HTTP challenge still
 works through it.
 
+## Login captcha
+
+`LOGIN_CAPTCHA=on` in `.env` (setup-https.sh sets it) adds a proof-of-work
+check to the login page using [Cap](https://trycap.dev), embedded in this app.
+The browser spends a second or two of CPU before it may try a password —
+invisible to a person, expensive for anything guessing passwords at scale. It
+runs as the page loads, so it is usually done before the password is typed;
+the Sign in button says "Verifying…" until it is.
+
+- Checked before the password: a client that has not done the work never gets
+  a guess. A failed check counts toward the 8-attempt lockout.
+- One solved check buys one attempt; tokens cannot be replayed.
+- No third party. The widget would normally fetch its solver from
+  cdn.jsdelivr.net; all of its files are served by this app instead, so login
+  works on networks that block CDNs and nothing about a visitor leaves the box.
+- Embedded rather than Cap's standalone server, to keep a second service off a
+  small VPS. That means proof-of-work only; the standalone server can add a
+  browser-instrumentation layer on top.
+
+**If it ever gets in the way:** set `LOGIN_CAPTCHA=off` and
+`systemctl restart shadowpbx-campaign`. The login then works exactly as it did
+before, so it cannot lock you out of your own server.
+
+Widget and solver versions are pinned together in package.json: the widget has
+the solver version built in, so upgrade them as a pair.
+
 ## Updating a running server
 
 ```

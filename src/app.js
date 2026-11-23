@@ -138,6 +138,12 @@ app.use(session({
             maxAge: 12 * 3600 * 1000 },
 }));
 
+// Login captcha (off unless LOGIN_CAPTCHA=on). Mounted before every
+// auth-protected route: the login page needs it before anyone is signed in.
+const captcha = require('./services/captcha');
+app.locals.captchaOn = captcha.mount(app);
+if (app.locals.captchaOn) console.log('Login captcha: on (Cap, proof-of-work, served locally)');
+
 const upload = multer({
   dest: os.tmpdir(),
   limits: { fileSize: 25 * 1024 * 1024 },
@@ -179,7 +185,14 @@ function sameSecret(a, b) {
   const y = crypto.createHash('sha256').update(String(b || '')).digest();
   return crypto.timingSafeEqual(x, y);
 }
-app.post('/login', (req, res) => {
+function noteLoginFailure(ip) {
+  const now = Date.now();
+  const rec = loginFails.get(ip);
+  const n = rec && rec.until > now ? rec.n + 1 : 1;
+  loginFails.set(ip, { n, until: now + LOGIN_WINDOW_MS });
+  if (loginFails.size > 10000) loginFails.clear();  // bounded under a flood
+}
+app.post('/login', async (req, res) => {
   const ip = req.ip || 'unknown';
   const now = Date.now();
   const rec = loginFails.get(ip);
@@ -187,6 +200,14 @@ app.post('/login', (req, res) => {
     const mins = Math.ceil((rec.until - now) / 60000);
     return res.status(429).render('login',
       { error: `Too many failed attempts. Try again in ${mins} minute${mins === 1 ? '' : 's'}.` });
+  }
+  // The captcha is checked before the password, so a client that has not done
+  // the work never gets a password guess at all. A failed check counts toward
+  // the lockout too: a bot replaying junk tokens is locked out like any other.
+  const human = await captcha.verify(req.body['cap-token']);
+  if (!human.ok) {
+    noteLoginFailure(ip);
+    return res.status(401).render('login', { error: human.error });
   }
   const okUser = sameSecret(req.body.username, ARI_USER);
   const okPass = sameSecret(req.body.password, ARI_PASS);
@@ -198,9 +219,7 @@ app.post('/login', (req, res) => {
       res.redirect('/');
     });
   }
-  const n = rec && rec.until > now ? rec.n + 1 : 1;
-  loginFails.set(ip, { n, until: now + LOGIN_WINDOW_MS });
-  if (loginFails.size > 10000) loginFails.clear();  // bounded under a flood
+  noteLoginFailure(ip);
   setTimeout(() => res.status(401).render('login', { error: 'Invalid credentials' }), 400);
 });
 app.post('/logout', (req, res) => req.session.destroy(() => res.redirect('/login')));

@@ -114,7 +114,7 @@ function recordOutcome(c, rt, phone, job) {
     // exactly one in dialNow, so stepping back one is correct with or without
     // the entry; the remembered values are used when available because they
     // also restore the original lastAttempt.
-    const now = leads.readRows(c.leadListId).find((r) => r.phone === phone);
+    const now = leads.findRow(c.leadListId, phone);
     const restoredAttempts = entry && entry.prevAttempts != null
       ? entry.prevAttempts
       : Math.max(0, ((now && now.attempts) || 1) - 1);
@@ -173,7 +173,7 @@ function recordOutcome(c, rt, phone, job) {
 
   leads.updateRow(c.leadListId, phone, {
     status,
-    attempts: (leads.readRows(c.leadListId).find((r) => r.phone === phone) || {}).attempts || 1,
+    attempts: (leads.findRow(c.leadListId, phone) || {}).attempts || 1,
     outcome: job.result || '',
     lastAttempt: new Date().toISOString(),
   });
@@ -235,7 +235,7 @@ function recordOutcome(c, rt, phone, job) {
     totalSeconds: (endMs - job.startedAt) / 1000,
     trunk: cfgTrunkName(c),
     route: job.routeNumber || '',
-    attempt: (leads.readRows(c.leadListId).find((r) => r.phone === phone) || {}).attempts || 1,
+    attempt: (leads.findRow(c.leadListId, phone) || {}).attempts || 1,
     hangupCause: job.hangupCause,
     result: job.result || '',
     path: job.path || [],
@@ -322,7 +322,7 @@ function dialNow(c, rt, lead, cfg) {
 
   // Count the attempt before the call, not after: a crash mid-call must not
   // leave a lead that gets dialled forever.
-  const row = leads.readRows(c.leadListId).find((r) => r.phone === lead.phone);
+  const row = leads.findRow(c.leadListId, lead.phone);
   const prevAttempts = (row && row.attempts) || 0;
   const prevLastAttempt = (row && row.lastAttempt) || null;
   leads.updateRow(c.leadListId, lead.phone, {

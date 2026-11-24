@@ -74,11 +74,68 @@ const rowsPath = (id) => {
  * edits the file behind this process -- a restore, another tool, a hand edit
  * -- is still picked up rather than being masked until a restart.
  */
-const rowCache = new Map();                        // id -> { key, rows }
+const rowCache = new Map();                        // id -> { key, rows, byPhone }
+
+/**
+ * Write-behind for per-call updates.
+ *
+ * Every call used to rewrite the WHOLE list file, two or three times. At 150k
+ * leads that is a 24 MB JSON.stringify + write per update, a hundred times a
+ * second at campaign concurrency. The process spent all its time doing that,
+ * so it stopped reading ARI's replies in time: calls "never confirmed", ARI
+ * "did not respond within 15s", pages that would not load -- with Asterisk
+ * itself answering in under a millisecond.
+ *
+ * Now a call only changes the row in memory and marks the list dirty; the
+ * file is written at most once every FLUSH_MS. While a list is dirty the
+ * in-memory rows ARE the truth, so reads never go back to the stale file.
+ * A crash loses at most FLUSH_MS of status changes.
+ */
+const FLUSH_MS = 3000;
+const dirty = new Set();
+let flushTimer = null;
+
+function writeFileAtomic(id, rows) {
+  ensure();
+  const file = rowsPath(id);
+  const tmp = `${file}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(rows));
+  fs.renameSync(tmp, file);
+  const st = fs.statSync(file);
+  return `${st.mtimeMs}:${st.size}`;
+}
+
+function flushAll() {
+  if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+  for (const id of [...dirty]) {
+    dirty.delete(id);
+    const e = rowCache.get(id);
+    if (!e) continue;
+    try { e.key = writeFileAtomic(id, e.rows); }
+    catch (err) {
+      console.error(`leads: could not save list ${id}: ${err.message}`);
+      dirty.add(id);
+    }
+  }
+  if (dirty.size && !flushTimer) flushTimer = setTimeout(flushAll, FLUSH_MS);
+}
+
+function markDirty(id) {
+  dirty.add(id);
+  if (!flushTimer) flushTimer = setTimeout(flushAll, FLUSH_MS);
+}
+
+// Never lose pending changes on a normal stop or restart.
+process.on('exit', flushAll);
+for (const sig of ['SIGTERM', 'SIGINT']) {
+  process.once(sig, () => { try { flushAll(); } finally { process.exit(0); } });
+}
 
 function readRows(id) {
   let file;
   try { file = rowsPath(id); } catch (e) { return []; }
+  const pending = rowCache.get(id);
+  if (pending && dirty.has(id)) return pending.rows;
   let key;
   try {
     const st = fs.statSync(file);
@@ -92,21 +149,32 @@ function readRows(id) {
   let rows;
   try { rows = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { return []; }
   if (!Array.isArray(rows)) rows = [];
-  rowCache.set(id, { key, rows });
+  rowCache.set(id, { key, rows, byPhone: null });
   return rows;
 }
 
+/** One lead by phone, via an index instead of scanning 100k+ rows each time. */
+function findRow(id, phone) {
+  const rows = readRows(id);
+  const e = rowCache.get(id);
+  if (!e || e.rows !== rows) return rows.find((r) => r.phone === phone) || null;
+  if (!e.byPhone) {
+    e.byPhone = new Map();
+    for (const r of rows) if (!e.byPhone.has(r.phone)) e.byPhone.set(r.phone, r);
+  }
+  return e.byPhone.get(phone) || null;
+}
+
 function writeRows(id, rows) {
-  ensure();
-  const tmp = `${rowsPath(id)}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(rows));
-  fs.renameSync(tmp, rowsPath(id));
+  dirty.delete(id);                     // this full write supersedes anything pending
+  rowCache.delete(id);
+  writeFileAtomic(id, rows);
   // Seed the cache from what we just wrote rather than dropping it, so the
   // next read -- which during a campaign is milliseconds away -- does not
   // have to parse the file straight back in.
   try {
     const st = fs.statSync(rowsPath(id));
-    rowCache.set(id, { key: `${st.mtimeMs}:${st.size}`, rows });
+    rowCache.set(id, { key: `${st.mtimeMs}:${st.size}`, rows, byPhone: null });
   } catch (e) { rowCache.delete(id); }
 }
 
@@ -308,6 +376,7 @@ function remove(id) {
   const idx = readIndex();
   if (!idx.some((l) => l.id === id)) return { ok: false, error: 'List not found' };
   writeIndex(idx.filter((l) => l.id !== id));
+  dirty.delete(id);
   rowCache.delete(id);
   try { fs.unlinkSync(rowsPath(id)); } catch (e) {}
   return { ok: true };
@@ -347,11 +416,11 @@ function dueRows(listId, { retryAttempts = 1, retryDelayMinutes = 60, limit = 50
 
 /** Patch one lead by phone number. Rewrites the file, so batch where you can. */
 function updateRow(listId, phone, patch) {
-  const rows = readRows(listId);
-  const r = rows.find((x) => x.phone === phone);
+  const r = findRow(listId, phone);
   if (!r) return null;
   Object.assign(r, patch);
-  writeRows(listId, rows);
+  if (rowCache.has(listId)) markDirty(listId);
+  else writeRows(listId, readRows(listId));   // not cached: fall back to a direct write
   return r;
 }
 
@@ -472,6 +541,6 @@ function remaining(listId, retryAttempts = 1) {
 module.exports = {
   nextDueAt, page, statusCounts, writeCsv, EXPORT_COLUMNS,
   DIR, COUNTRIES, list, get, create, update, remove, stats,
-  importCSV, readRows, writeRows, normalizePhone,
+  importCSV, readRows, writeRows, findRow, flushAll, normalizePhone,
   dueRows, updateRow, remaining,
 };

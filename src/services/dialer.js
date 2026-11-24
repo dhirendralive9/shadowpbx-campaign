@@ -272,6 +272,11 @@ function cfgTrunkName(c) {
   } catch (e) { return ''; }
 }
 
+// Bounds on a reserved slot that has nothing behind it. See tick().
+const SLOT_NOJOB_MAX_MS = 60000;
+const SLOT_QUEUED_MAX_MS = 10 * 60000;
+const SLOT_HARD_MAX_MS = 45 * 60000;
+
 function placeCall(c, rt, lead, cfg, delayMs = 0) {
   // Reserve the slot NOW even when the dial itself is held back for pacing.
   // The next tick excludes whatever is in rt.calls; a lead that is scheduled
@@ -297,7 +302,10 @@ function placeCall(c, rt, lead, cfg, delayMs = 0) {
       }
       const e = rt.calls.get(lead.phone);
       if (e) { e.state = 'dialing'; e.startedAt = nowSec(); }
-      dialNow(live, rt, lead, cfg);
+      // An exception here is not caught by anyone (we are in a timer), and it
+      // left the slot reserved for ever.
+      try { dialNow(live, rt, lead, cfg); }
+      catch (err) { rt.calls.delete(lead.phone); rt.lastError = err.message; }
     }, delayMs);
     return;
   }
@@ -406,6 +414,20 @@ function tick(id) {
     // until the campaign dials nothing and reports no error.
     if (!job) {
       if (entry.jobId && Date.now() - (entry.startedAt || 0) > 5000) rt.calls.delete(phone);
+      // Reserved but no job was ever attached: dialNow failed part-way. Only
+      // 'queued' entries legitimately wait without one (pacing), and even
+      // those are bounded.
+      else if (!entry.jobId) {
+        const since = entry.startedAt || entry.queuedAt || 0;
+        const limit = entry.state === 'queued' ? SLOT_QUEUED_MAX_MS : SLOT_NOJOB_MAX_MS;
+        if (Date.now() - since > limit) rt.calls.delete(phone);
+      }
+      continue;
+    }
+    // Last resort behind the job's own watchdog: drop anything far too old.
+    if (!job.finished && Date.now() - job.startedAt > SLOT_HARD_MAX_MS) {
+      testcall.hangup(job.id).catch(() => {});
+      rt.calls.delete(phone);
       continue;
     }
     entry.state = job.finished ? 'done' : (job.state || entry.state);

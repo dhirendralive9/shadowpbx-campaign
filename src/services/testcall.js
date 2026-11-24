@@ -51,9 +51,21 @@ function dialString(endpoint, number, format = 'e164') {
 }
 const newId = () => crypto.randomBytes(5).toString('hex');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const withTimeout = (p, ms, msg) => Promise.race([
-  p, new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), ms)),
-]);
+const withTimeout = (p, ms, msg) => {
+  let t;
+  return Promise.race([
+    p, new Promise((_, rej) => { t = setTimeout(() => rej(new Error(msg)), ms); }),
+  ]).finally(() => clearTimeout(t));
+};
+
+// Ceilings for anything that talks to Asterisk. Without them a single slow or
+// wedged ARI request held its call -- and a dialler slot -- for ever.
+const ORIGINATE_MS = 20000;          // originate() accepted
+const ARI_CALL_MS = 10000;           // answer(), channels.get/hangup
+const NO_ANSWER_MS = 120000;         // placed but never answered (Asterisk stops at 45s)
+const AGENT_STUCK_MS = 360000;       // in "ringing agent" this long = hung
+const MENU_CEILING_S = 900;          // menu limit when the campaign sets none
+const WATCHDOG_TICK_MS = 5000;
 
 // How many FINISHED jobs to keep for the UI to show. Live jobs are never
 // counted against this.
@@ -171,7 +183,7 @@ function connect() {
 
 function log(job, text, state) {
   if (job.finished) return;
-  if (state) job.state = state;
+  if (state && state !== job.state) { job.state = state; job.stateAt = Date.now(); }
   job.events.push({ at: Date.now() - job.startedAt, text });
   console.log(`[test ${job.id}] ${text}`);
 }
@@ -180,6 +192,7 @@ function finish(job, ok, result) {
   if (job.finished) return;
   job.finished = true;
   job.finishedAt = Date.now();
+  if (job._dog) clearInterval(job._dog);
   job.ok = ok;
   job.state = 'done';
   job.result = result;
@@ -240,8 +253,9 @@ async function onStasisStart(event, channel) {
   log(job, 'Answered', 'answered');
 
   try {
-    await channel.answer();
+    await withTimeout(channel.answer(), ARI_CALL_MS, 'Asterisk did not confirm the answer within 10s');
   } catch (e) {
+    try { await channel.hangup(); } catch (err) {}
     return finish(job, false, `Answer failed: ${e.message}`);
   }
 
@@ -556,7 +570,7 @@ async function doTransfer(job, channel, client, key) {
     + `(up to ${job.agentRingSeconds}s)`, 'ringing-agent');
   const agent = client.Channel();
   try {
-    await agent.originate({
+    await withTimeout(agent.originate({
       endpoint: dialString(target.endpoint, target.routeNumber, 'plain'),
       app: ARI_APP,
       appArgs: `agent,${job.id}`,
@@ -565,8 +579,9 @@ async function doTransfer(job, channel, client, key) {
       // screen pop and makes a callback impossible.
       callerId: job.number,
       timeout: job.agentRingSeconds,
-    });
+    }), ORIGINATE_MS, 'Asterisk did not accept the agent call within 20s');
   } catch (e) {
+    try { await agent.hangup(); } catch (err) {}
     finish(job, false, `Could not ring the agent: ${e.message}`);
     try { await channel.hangup(); } catch (err) {}
     return;
@@ -815,7 +830,11 @@ function start(opts) {
     ok: false,
     result: '',
   };
+  job.stateAt = Date.now();
   jobs.set(job.id, job);
+  // Armed before anything can hang, so no job outlives it -- see watchdog().
+  job._dog = setInterval(() => { watchdog(job).catch(() => {}); }, WATCHDOG_TICK_MS);
+  if (job._dog.unref) job._dog.unref();
   reap();
   run(job);
   return job;
@@ -834,6 +853,7 @@ async function run(job) {
   log(job, `Dialling ${dialString(job.endpoint, job.number, job.numberFormat)}`, 'dialing');
 
   const chan = client.Channel();
+  job._leadChanId = chan.id;
   chan.on('ChannelStateChange', (evt, c) => {
     if (/ring/i.test(c.state || '')) log(job, 'Ringing', 'ringing');
   });
@@ -854,25 +874,109 @@ async function run(job) {
   });
 
   try {
-    await chan.originate({
+    await withTimeout(chan.originate({
       endpoint: dialString(job.endpoint, job.number, job.numberFormat),
       app: ARI_APP,
       appArgs: `test,${job.id}`,
       callerId: job.callerId || undefined,
       timeout: 45,
-    });
+    }), ORIGINATE_MS, 'Asterisk did not accept the call within 20s');
+    job._originated = true;
   } catch (e) {
+    if (job.finished) return;
+    // If Asterisk does place it late, the StasisStart handler sees a finished
+    // job and hangs it up; this makes sure it never rings unowned either way.
+    try { await chan.hangup(); } catch (err) {}
     // originate() rejecting means Asterisk would not even start the call:
     // endpoint missing, ARI gone, no channel available locally. The carrier
     // was never asked, so this is ours.
     job.failureKind = 'infra';
     return finish(job, false, `Could not place the call: ${e.message}`);
   }
+}
 
-  // Backstop, so a job can never sit "dialing" forever in the UI.
-  setTimeout(() => {
-    if (!job.finished) finish(job, false, 'Timed out after 150s with no answer.');
-  }, 150000);
+/**
+ * Job watchdog: the guarantee that every job finishes.
+ *
+ * Every ARI request is a network call that can hang, and every outcome rides
+ * on an event that can be lost. Before this, a hung originate() left a job in
+ * "dialing" for ever (the old backstop was only armed after originate
+ * returned), and each such job held one of the campaign's concurrency slots
+ * until the dialler was dialling nothing at all. This runs from the moment
+ * the job exists and asks Asterisk directly instead of trusting events.
+ */
+async function ariQuick(fn) {
+  const client = await withTimeout(connect(), ARI_CALL_MS, 'ARI did not respond');
+  return withTimeout(fn(client), ARI_CALL_MS, 'ARI did not respond');
+}
+const isNotFound = (e) => e && (e.statusCode === 404 || /not found|404/i.test(e.message || ''));
+
+/** true = Asterisk says it is gone; false = alive; null = could not tell. */
+async function channelGone(id) {
+  try { await ariQuick((c) => c.channels.get({ channelId: id })); return false; }
+  catch (e) { return isNotFound(e) ? true : null; }
+}
+
+async function dropChannels(job) {
+  for (const id of [job._agentChan && job._agentChan.id, job.channelId || job._leadChanId]) {
+    if (!id) continue;
+    try { await ariQuick((c) => c.channels.hangup({ channelId: id })); } catch (e) {}
+  }
+}
+
+async function watchdog(job) {
+  if (job.finished) return clearInterval(job._dog);
+  if (job._wdBusy) return;
+  job._wdBusy = true;
+  try {
+    const now = Date.now();
+    const age = now - job.startedAt;
+    const secs = Math.round(age / 1000);
+
+    if (!job.channelId) {
+      // Never answered.
+      if (!job._originated && age > ORIGINATE_MS + 10000) {
+        job.failureKind = 'infra';       // the carrier was never asked: refund it
+        await dropChannels(job);
+        return finish(job, false,
+          `Cleared by watchdog after ${secs}s: Asterisk never confirmed the call was placed.`);
+      }
+      // Asterisk gives up ringing at 45s; well past that, the hangup was lost.
+      if (job._originated && age > NO_ANSWER_MS) {
+        const gone = job._leadChanId ? await channelGone(job._leadChanId) : null;
+        await dropChannels(job);
+        return finish(job, false,
+          `Cleared by watchdog after ${secs}s: no answer`
+          + (gone ? ' (the hangup event from Asterisk was lost).' : '.'));
+      }
+      return;
+    }
+
+    // Answered: if the lead's channel is gone, so is the call.
+    if (await channelGone(job.channelId) === true) {
+      if (job._agentChan) { try { await job._agentChan.hangup(); } catch (e) {} }
+      return finish(job, false,
+        `Call ended after ${secs}s (the hangup event from Asterisk was lost; cleared by watchdog).`);
+    }
+
+    // Stuck ringing the agent well past any ring/hold time.
+    if (job.state === 'ringing-agent' && now - (job.stateAt || now) > AGENT_STUCK_MS) {
+      await dropChannels(job);
+      return finish(job, false,
+        `Cleared by watchdog: rang the agent for ${Math.round((now - job.stateAt) / 1000)}s with no result.`);
+    }
+
+    // Absolute ceiling. A bridged call finishes the job, so nothing still in
+    // here is a live conversation -- only a menu, a hold or something hung.
+    const menuS = job.maxCallSeconds > 0 ? job.maxCallSeconds : MENU_CEILING_S;
+    if (age > (menuS + 420) * 1000) {
+      await dropChannels(job);
+      return finish(job, false,
+        `Cleared by watchdog after ${secs}s: the call never reached an outcome.`);
+    }
+  } finally {
+    job._wdBusy = false;
+  }
 }
 
 const get = (id) => jobs.get(id) || null;

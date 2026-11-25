@@ -21,7 +21,7 @@
           <a class="btn btn-sm" href="/leads/<%= l.id %>">Open</a>
           <a class="btn btn-sm" href="/leads/<%= l.id %>/export.csv">Download</a>
           <form class="inline-form" method="post" action="/leads/<%= l.id %>/delete"
-                onsubmit="return confirm('Delete list <%= l.name %> and all its leads?')">
+                onsubmit="return confirm(<%= JSON.stringify('Delete list ' + l.name + ' and all its leads?') %>)">
             <button class="btn btn-sm btn-danger" type="submit">Delete</button></form>
         </td>
       </tr>

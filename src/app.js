@@ -165,6 +165,17 @@ function base(req, extra = {}) {
 const back = (to, r) =>
   `${to}?${r.ok ? 'msg' : 'err'}=${encodeURIComponent(r.message || r.error || '')}`;
 
+/**
+ * Where a campaign action should land: back on the page it was pressed on.
+ * The form says which page by NAME, never by URL, so this cannot be turned
+ * into an open redirect; the id comes from the route, which already matched.
+ */
+const CAMPAIGN_RETURN = { live: (id) => `/campaigns/${encodeURIComponent(id)}/live` };
+const campaignReturn = (req) => {
+  const to = CAMPAIGN_RETURN[(req.body && req.body.return) || ''];
+  return to ? to(req.params.id) : '/campaigns';
+};
+
 // ---------------------------------------------------------------- auth
 app.get('/login', (req, res) => res.render('login', { error: null }));
 /**
@@ -391,15 +402,15 @@ app.post('/campaigns/save', auth, (req, res) => {
 
 app.post('/campaigns/:id/start', auth, (req, res) => {
   const r = dialer.start(req.params.id);
-  res.redirect(back('/campaigns', r.ok ? { ok: true, message: r.message } : r));
+  res.redirect(back(campaignReturn(req), r.ok ? { ok: true, message: r.message } : r));
 });
 app.post('/campaigns/:id/pause', auth, (req, res) => {
   const r = dialer.pause(req.params.id);
-  res.redirect(back('/campaigns', r));
+  res.redirect(back(campaignReturn(req), r));
 });
 app.post('/campaigns/:id/stop', auth, async (req, res) => {
   const r = await dialer.stop(req.params.id);
-  res.redirect(back('/campaigns', r));
+  res.redirect(back(campaignReturn(req), r));
 });
 
 /** Live counters for the campaign dashboard. */

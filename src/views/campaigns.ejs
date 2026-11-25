@@ -36,17 +36,17 @@
               <button class="btn btn-sm" type="submit">Pause</button></form>
           <% } %>
           <form class="inline-form" method="post" action="/campaigns/<%= c.id %>/stop"
-                onsubmit="return confirm('Stop <%= c.name %>? Calls in progress are dropped.')">
+                onsubmit="return confirm(<%= JSON.stringify('Stop ' + c.name + '? Calls in progress are dropped.') %>)">
             <button class="btn btn-sm" type="submit">Stop</button></form>
           <a class="btn btn-sm <%= running ? 'btn-primary' : '' %>"
              href="/campaigns/<%= c.id %>/live">Status</a>
           <a class="btn btn-sm" href="/campaigns/<%= c.id %>">Edit</a>
           <a class="btn btn-sm" href="/campaigns/<%= c.id %>/report">Report</a>
           <form class="inline-form" method="post" action="/campaigns/<%= c.id %>/reset-stats"
-                onsubmit="return confirm('Reset the counters for <%= c.name %>?')">
+                onsubmit="return confirm(<%= JSON.stringify('Reset the counters for ' + c.name + '?') %>)">
             <button class="btn btn-sm" type="submit">Reset stats</button></form>
           <form class="inline-form" method="post" action="/campaigns/<%= c.id %>/delete"
-                onsubmit="return confirm('Delete campaign <%= c.name %>?')">
+                onsubmit="return confirm(<%= JSON.stringify('Delete campaign ' + c.name + '?') %>)">
             <button class="btn btn-sm btn-danger" type="submit">Delete</button></form>
         </td>
       </tr>

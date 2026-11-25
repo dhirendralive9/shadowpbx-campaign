@@ -26,7 +26,7 @@
               <button class="btn btn-sm" type="submit">Use this</button></form>
           <% } %>
           <form class="inline-form" method="post" action="/servers/<%= sv.id %>/delete"
-                onsubmit="return confirm('Delete server <%= sv.name %>?')">
+                onsubmit="return confirm(<%= JSON.stringify('Delete server ' + sv.name + '?') %>)">
             <button class="btn btn-sm btn-danger" type="submit">Delete</button></form>
         </td>
       </tr>
@@ -69,7 +69,7 @@ settings.servers.forEach(function(sv){ var on = sv.id === settings.activeServerI
         <button class="btn" type="button" onclick="copyRoute('<%= sv.id %>')">Copy number</button>
         <button class="btn" type="button" onclick="refreshAgents('<%= sv.id %>')">Refresh agents</button>
         <form class="inline-form" method="post" action="/servers/<%= sv.id %>/regenerate-route"
-              onsubmit="return confirm('Generate a new route number for <%= sv.name %>?\n\nCalls stop reaching its agents until you repoint the inbound route on that PBX.')">
+              onsubmit="return confirm(<%= JSON.stringify('Generate a new route number for ' + sv.name + '?\n\nCalls stop reaching its agents until you repoint the inbound route on that PBX.') %>)">
           <button class="btn btn-sm" type="submit">Regenerate</button></form>
       </div>
       <div class="form-group">

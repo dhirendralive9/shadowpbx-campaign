@@ -17,13 +17,16 @@
             id="st-pill"><%= campaign.status %></span>
       <% if (campaign.status !== 'running') { %>
         <form class="inline-form" method="post" action="/campaigns/<%= campaign.id %>/start">
+          <input type="hidden" name="return" value="live">
           <button class="btn btn-sm btn-primary" type="submit">Start</button></form>
       <% } else { %>
         <form class="inline-form" method="post" action="/campaigns/<%= campaign.id %>/pause">
+          <input type="hidden" name="return" value="live">
           <button class="btn btn-sm" type="submit">Pause</button></form>
       <% } %>
       <form class="inline-form" method="post" action="/campaigns/<%= campaign.id %>/stop"
-            onsubmit="return confirm('Stop <%= campaign.name %>? Calls in progress are dropped.')">
+            onsubmit="return confirm(<%= JSON.stringify('Stop ' + campaign.name + '? Calls in progress are dropped.') %>)">
+        <input type="hidden" name="return" value="live">
         <button class="btn btn-sm" type="submit">Stop</button></form>
       <a class="btn btn-sm" href="/campaigns/<%= campaign.id %>/report">Report</a>
       <a class="btn btn-sm" href="/campaigns/<%= campaign.id %>">Edit</a>

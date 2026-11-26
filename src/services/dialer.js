@@ -28,6 +28,16 @@ const TICK_MS = 2000;
 // Low on purpose: these arrive within seconds of each other and every one is
 // a call that did not happen.
 const INFRA_FAIL_LIMIT = 10;
+/**
+ * Carrier congestion (cause 34 & co.) is not a fault to stop on: it is the
+ * carrier saying "slower". Each one halves the dial rate, trims concurrency
+ * to just under what was live, and holds off briefly; every connected call
+ * earns some of it back. Only a long unbroken run of refusals -- the carrier
+ * refusing even at the floor rate -- pauses the campaign.
+ */
+const CONGEST_PAUSE_LIMIT = 12;          // separate refusal events, each after a 15s hold-off
+const CONGEST_BACKOFF_MS = 15000;
+const MIN_RATE_FACTOR = 0.1;
 
 // campaignId -> runtime state. Nothing here survives a restart: a campaign is
 // resumed deliberately, not silently, because nobody wants a dialler that
@@ -77,6 +87,7 @@ function capacity(c, rt) {
   const allowed = Math.max(0, Math.min(
     free * (c.pacing.linesPerAgent || 1),
     c.pacing.maxConcurrent || 1,
+    rt.concCap || Infinity,              // lowered while the carrier is congested
   ) - rt.calls.size);
 
   if (!allowed) return { n: 0, why: `at capacity (${rt.calls.size} live)` };
@@ -133,18 +144,47 @@ function recordOutcome(c, rt, phone, job) {
     st.lastFailure = job.result || '';
     campaigns.saveStats(c.id, st);
 
-    rt.infraFails = (rt.infraFails || 0) + 1;
-    rt.lastError = `${job.failureKind === 'infra' ? 'Infrastructure' : 'Carrier capacity'}: `
-      + `${job.result || 'call could not be placed'} — the lead was not charged an attempt.`;
-
-    // Stop rather than spin. At full concurrency a dead ARI produces hundreds
-    // of these a minute, each one a log line and a wasted tick, and the
-    // campaign looks busy while placing no calls at all.
-    if (rt.infraFails >= INFRA_FAIL_LIMIT) {
-      campaigns.setStatus(c.id, 'paused');
-      rt.lastError = `Paused after ${rt.infraFails} calls failed before reaching anyone. `
-        + `Last reason: ${job.result || 'unknown'}. No leads were charged an attempt. `
-        + 'Fix the cause, then press Start.';
+    if (job.failureKind === 'congestion') {
+      // Calls dialled before the last slowdown were already on their way when
+      // the carrier pushed back; their refusals are the same event, not new
+      // evidence. Counting each one halved the rate again and again and
+      // tripped the pause from a single burst.
+      const sameBurst = rt.lastCongestAt && job.startedAt <= rt.lastCongestAt;
+      if (!sameBurst) {
+        rt.lastCongestAt = Date.now();
+        // Anything reserved but not yet dialled was paced at the old rate: drop
+        // it, so the slowdown applies now rather than after the queue drains.
+        for (const [p2, e2] of rt.calls) if (e2.state === 'queued' && !e2.jobId) rt.calls.delete(p2);
+        rt.nextSlotAt = null;
+        rt.congestFails = (rt.congestFails || 0) + 1;
+        const was = rt.rateFactor || 1;
+        rt.rateFactor = Math.max(MIN_RATE_FACTOR, was / 2);
+        // Concurrency too: carriers cap simultaneous channels as well as CPS.
+        rt.concCap = Math.max(2, Math.floor(Math.min(rt.concCap || Infinity, rt.calls.size + 1) * 0.75));
+        rt.backoffUntil = Date.now() + CONGEST_BACKOFF_MS;
+        rt.lastError = `Carrier is refusing calls (busy / no circuit) — slowed to `
+          + `${Math.round(rt.rateFactor * 100)}% of the set rate, max ${rt.concCap} at once. `
+          + 'It speeds back up as calls connect. No leads were charged.';
+        if (rt.congestFails >= CONGEST_PAUSE_LIMIT) {
+          campaigns.setStatus(c.id, 'paused');
+          rt.lastError = `Paused: the carrier refused ${rt.congestFails} calls in a row even at `
+            + `the slowest rate. Last reason: ${job.result || 'unknown'}. Check the trunk's `
+            + 'channel/CPS limit or balance with the carrier, then press Start.';
+        }
+      }
+    } else {
+      rt.infraFails = (rt.infraFails || 0) + 1;
+      rt.lastError = `Infrastructure: ${job.result || 'call could not be placed'} `
+        + '— the lead was not charged an attempt.';
+      // Stop rather than spin. At full concurrency a dead ARI produces hundreds
+      // of these a minute, each one a log line and a wasted tick, and the
+      // campaign looks busy while placing no calls at all.
+      if (rt.infraFails >= INFRA_FAIL_LIMIT) {
+        campaigns.setStatus(c.id, 'paused');
+        rt.lastError = `Paused after ${rt.infraFails} calls failed before reaching anyone. `
+          + `Last reason: ${job.result || 'unknown'}. No leads were charged an attempt. `
+          + 'Fix the cause, then press Start.';
+      }
     }
     calls.record({
       startedAt: new Date(job.startedAt).toISOString(),
@@ -157,8 +197,12 @@ function recordOutcome(c, rt, phone, job) {
     });
     return;
   }
-  // A real conversation resets the breaker.
+  // A real call (it reached the carrier and was not refused) resets the
+  // breakers and earns back some of the speed congestion took away.
   rt.infraFails = 0;
+  rt.congestFails = 0;
+  if (rt.rateFactor && rt.rateFactor < 1) rt.rateFactor = Math.min(1, rt.rateFactor * 1.15);
+  if (rt.concCap) rt.concCap += 1;
 
   const path = (job.path || []).join(' → ');
   const transferred = path.includes('transfer') && job.ok;
@@ -436,8 +480,10 @@ function tick(id) {
     if (job.finished && Date.now() - job.startedAt > 5000) rt.calls.delete(phone);
   }
 
+  if (rt.backoffUntil && Date.now() < rt.backoffUntil) return;   // carrier asked us to slow down
+
   const { n, why } = capacity(c, rt);
-  rt.lastError = why;
+  if (why || !/^Carrier is refusing/.test(rt.lastError || '')) rt.lastError = why;
   if (n <= 0) return;
 
   const due = leads.dueRows(c.leadListId, {
@@ -490,7 +536,8 @@ function tick(id) {
   // limit as no limit is how a rate limit quietly stops existing.
   const cps = c.pacing.callsPerSecond == null
     ? campaigns.DEFAULT_PACING.callsPerSecond : c.pacing.callsPerSecond;
-  const spacing = cps > 0 ? 1000 / cps : 0;
+  const effCps = cps > 0 ? Math.max(0.2, cps * (rt.rateFactor || 1)) : 0;
+  const spacing = effCps > 0 ? 1000 / effCps : 0;
   const now = Date.now();
   if (rt.nextSlotAt == null || rt.nextSlotAt < now) rt.nextSlotAt = now;
 
@@ -513,6 +560,15 @@ function start(id) {
   const rt = runtime(id);
   rt.startedAt = rt.startedAt || new Date().toISOString();
   rt.lastError = '';
+  // Pressing Start is the operator saying "I fixed it": the breakers start
+  // over. Without this the count from the last run stayed at its limit and
+  // the very first failure paused the campaign again, instantly.
+  rt.infraFails = 0;
+  rt.congestFails = 0;
+  rt.rateFactor = 1;
+  rt.concCap = null;
+  rt.backoffUntil = 0;
+  rt.nextSlotAt = null;
   campaigns.setStatus(id, 'running');
   if (!rt.timer) rt.timer = setInterval(() => tick(id), TICK_MS);
   tick(id);
@@ -600,4 +656,7 @@ function haltAll() {
   }
 }
 
-module.exports = { start, pause, stop, status, resolve, capacity, haltAll };
+/** The last thing the engine had to say about a campaign, for list views. */
+const note = (id) => (live.has(id) ? live.get(id).lastError || '' : '');
+
+module.exports = { start, pause, stop, status, resolve, capacity, haltAll, note };

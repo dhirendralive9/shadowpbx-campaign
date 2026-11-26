@@ -333,6 +333,7 @@ app.get('/campaigns', auth, (req, res) =>
   res.render('campaigns', base(req, {
     active: 'campaigns', campaigns: campaigns.list(),
     lists: leads.list(), files: audio.list(),
+    notes: Object.fromEntries(campaigns.list().map((c) => [c.id, dialer.note(c.id)])),
   })));
 
 app.get('/campaigns/new', auth, (req, res) =>
@@ -400,9 +401,18 @@ app.post('/campaigns/save', auth, (req, res) => {
   res.redirect('/campaigns?msg=' + encodeURIComponent('Campaign saved.'));
 });
 
-app.post('/campaigns/:id/start', auth, (req, res) => {
+app.post('/campaigns/:id/start', auth, async (req, res) => {
   const r = dialer.start(req.params.id);
-  res.redirect(back(campaignReturn(req), r.ok ? { ok: true, message: r.message } : r));
+  if (!r.ok) return res.redirect(back(campaignReturn(req), r));
+  // The first calls fail (or not) within moments. Look before answering, so
+  // the page never says "running" over a campaign that has already paused.
+  await new Promise((done) => setTimeout(done, 1500));
+  const now = campaigns.get(req.params.id);
+  if (now && now.status !== 'running') {
+    return res.redirect(back(campaignReturn(req),
+      { ok: false, error: dialer.note(req.params.id) || `Campaign is ${now.status}.` }));
+  }
+  res.redirect(back(campaignReturn(req), { ok: true, message: r.message }));
 });
 app.post('/campaigns/:id/pause', auth, (req, res) => {
   const r = dialer.pause(req.params.id);

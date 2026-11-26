@@ -25,7 +25,10 @@
                 ? 'predictive ' + c.pacing.linesPerAgent + '×/agent' : 'power' %>,
           max <%= c.pacing.maxConcurrent %><%= c.pacing.callsPerHourCap ? ', ' + c.pacing.callsPerHourCap + '/h' : '' %></td>
         <td><span class="pill <%= running?'p-ok':(c.status==='paused'?'p-warn':'p-gray') %>"
-                 id="st-<%= c.id %>"><%= c.status %></span></td>
+                 id="st-<%= c.id %>"><%= c.status %></span>
+          <% if (c.status !== 'running' && notes && notes[c.id]) { %>
+            <div class="muted" style="font-size:11px;max-width:260px;white-space:normal"><%= notes[c.id] %></div>
+          <% } %></td>
         <td class="mono" style="font-size:11px" id="live-<%= c.id %>">—</td>
         <td style="text-align:right;white-space:nowrap">
           <% if (!running) { %>
